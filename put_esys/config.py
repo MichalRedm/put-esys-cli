@@ -1,6 +1,5 @@
-from pathlib import Path
 import json
-import os
+from pathlib import Path
 
 APP_DIR = Path.home() / ".put-esys"
 SESSION_FILE = APP_DIR / "session.json"

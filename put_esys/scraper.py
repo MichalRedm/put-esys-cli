@@ -1,6 +1,9 @@
 import re
+
 from bs4 import BeautifulSoup
+
 from .auth import get_authenticated_session
+
 
 def get_ekursy_courses(session=None):
     if not session:
@@ -49,7 +52,13 @@ def get_ekursy_courses(session=None):
     
     # In the profile tree, courses are listed under "Szczegóły kursów" or "Course profiles"
     # Find the header first
-    course_header = soup.find(lambda tag: tag.name in ['h3', 'dt'] and ('Profile w kursach' in tag.get_text() or 'Course profiles' in tag.get_text()))
+    def is_course_profile(tag):
+        return (
+            tag.name in ['div', 'dt'] and
+            ('Profile w kursach' in tag.get_text() or 'Course profiles' in tag.get_text())
+        )
+
+    course_header = soup.find(is_course_profile)
     
     if not course_header:
         # Search all <li> elements for course links as fallback
@@ -113,7 +122,11 @@ def get_course_content(course_id, session=None):
              # Try fallback for "General" or other structures
              name_tag = section_li.select_one('.section-title')
              
-        section_name = name_tag.get_text(strip=True) if name_tag else f"Section {section_li.get('id', '?')}"
+        if name_tag:
+            section_name = name_tag.get_text(strip=True)
+        else:
+            section_id = section_li.get('id', '?')
+            section_name = f"Section {section_id}"
         
         activities = []
         for activity_li in section_li.select('li.activity'):

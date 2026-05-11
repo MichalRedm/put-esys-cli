@@ -1,9 +1,14 @@
-import requests
-from bs4 import BeautifulSoup
-from .config import save_session, load_session
 from urllib.parse import urljoin
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+import requests
+from bs4 import BeautifulSoup
+
+from .config import load_session, save_session
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
 
 class AuthError(Exception):
     pass
@@ -18,7 +23,11 @@ def authenticate(username, password):
     csrf_token = soup.find('input', {'name': 'csrf_token'}).get('value')
     
     # 2. elogin login POST
-    resp = session.post(resp.url, data={'login': username, 'password': password, 'csrf_token': csrf_token, 'send': ''}, headers={"Referer": resp.url})
+    resp = session.post(
+        "https://elogin.put.poznan.pl/app/login",
+        data={'username': username, 'password': password, 'csrf_token': csrf_token, 'send': ''},
+        headers={"Referer": resp.url}
+    )
 
     # 3. Follow all auto-submit forms
     # We loop up to 5 times to avoid infinite recursion
@@ -37,7 +46,11 @@ def authenticate(username, password):
                 break
             action_url = urljoin(resp.url, action)
             
-            form_data = {inp.get('name'): inp.get('value', '') for inp in form.find_all('input', {'type': 'hidden'}) if inp.get('name')}
+            form_data = {
+                inp.get('name'): inp.get('value', '')
+                for inp in form.find_all('input', {'type': 'hidden'})
+                if inp.get('name')
+            }
             
             # Post the form
             resp = session.post(action_url, data=form_data, headers={"Referer": resp.url})
@@ -77,7 +90,7 @@ def ensure_authenticated_session():
             resp = session.get("https://ekursy.put.poznan.pl/", timeout=10)
             if "Logowanie" not in resp.text and "login" not in resp.url:
                 is_valid = True
-        except:
+        except Exception:
             pass
             
     if is_valid:
@@ -91,7 +104,7 @@ def ensure_authenticated_session():
     try:
         if authenticate(creds['username'], creds['password']):
             return get_authenticated_session()
-    except:
+    except Exception:
         pass
         
     return None

@@ -1,10 +1,12 @@
-import typer
 from typing import Optional
-from .auth import authenticate, ensure_authenticated_session
-from .scraper import get_ekursy_courses
-from .config import save_credentials, load_credentials, clear_credentials
+
+import typer
 from rich.console import Console
 from rich.table import Table
+
+from .auth import authenticate, ensure_authenticated_session
+from .config import clear_credentials, load_credentials, save_credentials
+from .scraper import get_ekursy_courses
 
 app = typer.Typer(help="PUT Electronic Systems CLI")
 config_app = typer.Typer(help="Manage your PUT credentials")
@@ -25,7 +27,8 @@ def config_show():
     """Show current configuration (password masked)."""
     creds = load_credentials()
     if not creds:
-        console.print("[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]")
+        msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
+        console.print(msg)
         return
     
     table = Table(title="PUT CLI Configuration")
@@ -56,7 +59,11 @@ def login(
             username = username or creds['username']
             password = password or creds['password']
         else:
-            console.print("[yellow]No credentials provided and none stored. Run 'put-esys config set' or provide options.[/yellow]")
+            msg = (
+                "[yellow]No credentials provided and none stored. "
+                "Run 'put-esys config set' or provide options.[/yellow]"
+            )
+            console.print(msg)
             return
 
     console.print(f"Logging in as [bold]{username}[/bold]...")
@@ -102,6 +109,7 @@ def ekursy():
 def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
     """Show content of a specific course."""
     import re
+
     from rich.tree import Tree
     
     # Extract ID if URL is provided
@@ -134,13 +142,20 @@ def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL"))
         section_tree = tree.add(f"[bold cyan]{section['name']}[/bold cyan]")
         for activity in section['activities']:
             icon = "[FILE]"
-            if activity['type'] == 'folder': icon = "[DIR]"
-            elif activity['type'] == 'assign': icon = "[ASSIGN]"
-            elif activity['type'] == 'quiz': icon = "[QUIZ]"
-            elif activity['type'] == 'forum': icon = "[FORUM]"
-            elif activity['type'] == 'url': icon = "[URL]"
+            if activity['type'] == 'folder':
+                icon = "[DIR]"
+            elif activity['type'] == 'assign':
+                icon = "[ASSIGN]"
+            elif activity['type'] == 'quiz':
+                icon = "[QUIZ]"
+            elif activity['type'] == 'forum':
+                icon = "[FORUM]"
+            elif activity['type'] == 'url':
+                icon = "[URL]"
             
-            section_tree.add(f"{icon} [magenta]{activity['name']}[/magenta] ([blue]{activity['url']}[/blue])")
+            section_tree.add(
+                f"{icon} [magenta]{activity['name']}[/magenta] ([blue]{activity['url']}[/blue])"
+            )
             
     console.print(tree)
 
@@ -161,16 +176,30 @@ def save(
     
     session = ensure_authenticated_session()
     if not session:
-        console.print("[yellow]Warning: Not authenticated. Attempting to fetch without session.[/yellow]")
+        msg = "[yellow]Warning: Not authenticated. Attempting to fetch without session.[/yellow]"
+        console.print(msg)
+        import requests
         session = requests.Session()
-        session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        ua = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        session.headers.update({"User-Agent": ua})
     
     try:
         resp = session.get(url)
         # Check if we were redirected to a login page
         if "elogin.put.poznan.pl" in resp.url and "elogin.put.poznan.pl" not in url:
-             console.print("[yellow]Detected redirection to eLogin. The current session might not be valid for this system.[/yellow]")
-             console.print("[hint]Try running 'put-esys login' or ensuring your credentials are set correctly.[/hint]")
+             msg = (
+                 "[yellow]Detected redirection to eLogin. "
+                 "The current session might not be valid for this system.[/yellow]"
+             )
+             console.print(msg)
+             hint = (
+                 "[hint]Try running 'put-esys login' or "
+                 "ensuring your credentials are set correctly.[/hint]"
+             )
+             console.print(hint)
         
         with open(output, "w", encoding="utf-8") as f:
             f.write(resp.text)
