@@ -1,0 +1,113 @@
+- generic [ref=e1]:
+  - list:
+    - listitem:
+      - link "Przejdź do głównej treści" [ref=e2] [cursor=pointer]:
+        - /url: "#main"
+    - listitem:
+      - link "Przejdź do stopki" [ref=e3] [cursor=pointer]:
+        - /url: "#footer"
+    - listitem:
+      - link "Deklaracja dostępności" [ref=e4] [cursor=pointer]:
+        - /url: https://elogin.put.poznan.pl/app/accessibility-statement
+  - banner [ref=e5]:
+    - heading "Logowanie - eLogin - Politechnika Poznańska" [level=1] [ref=e6]
+    - navigation [ref=e7]:
+      - list [ref=e8]:
+        - listitem [ref=e9]:
+          - link "English version" [ref=e10] [cursor=pointer]:
+            - /url: https://elogin.put.poznan.pl/app/en/login?redirect_path=%2Fapp%2Fdispatch%3Fplp_r_id%3D04c955e2c593af02191b5e0acf43f4d8
+            - img [ref=e11]
+            - text: English version
+        - listitem [ref=e12]:
+          - link "Pomoc" [ref=e13] [cursor=pointer]:
+            - /url: https://elogin.put.poznan.pl/app/help
+            - generic [ref=e14]: 
+            - text: Pomoc
+        - listitem [ref=e15]:
+          - link "Deklaracja dostępności" [ref=e16] [cursor=pointer]:
+            - /url: https://elogin.put.poznan.pl/app/accessibility-statement
+            - generic [ref=e17]: 
+            - text: Deklaracja dostępności
+      - list [ref=e18]:
+        - listitem [ref=e19]:
+          - button "Normalny kontrast A" [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]: Normalny kontrast
+            - text: A
+        - listitem [ref=e22]:
+          - button "Wysoki kontrast A" [ref=e23] [cursor=pointer]:
+            - generic [ref=e24]: Wysoki kontrast
+            - text: A
+    - text: 
+    - generic [ref=e26]:
+      - link "Politechnika Poznańska logo Strona główna" [ref=e28] [cursor=pointer]:
+        - /url: https://elogin.put.poznan.pl/
+        - img "Politechnika Poznańska logo" [ref=e30]
+        - generic [ref=e31]: Strona główna
+      - generic [ref=e33]:
+        - generic [ref=e34]: eLogin
+        - generic [ref=e35]: Centralny system uwierzytelniania PP
+  - main [ref=e36]:
+    - generic [ref=e38]:
+      - heading "Logowanie do systemu eKursy" [level=2] [ref=e39]
+      - paragraph [ref=e40]: System eKursy to system wspomagania procesu dydaktycznego i nauczania na odległość. Uwierzytelnienie i autoryzacja dostępu do tego systemu realizowana jest za pomocą Twojego osobistego eKonta.
+      - heading "Logowanie" [level=2] [ref=e41]
+      - generic [ref=e42]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - generic "Wypełnienie pola jest wymagane" [ref=e47]:
+              - generic [ref=e48]: 
+            - text: Nazwa konta
+            - generic "Wpisz nazwę konta w postaci imie.nazwisko@domena, np. jan.kowalski@put.poznan.pl" [ref=e49]:
+              - generic [ref=e50]: 
+          - textbox "Nazwa konta" [active] [ref=e51]:
+            - /placeholder: imie.nazwisko@domena
+        - generic [ref=e54]:
+          - generic [ref=e55]:
+            - generic "Wypełnienie pola jest wymagane" [ref=e56]:
+              - generic [ref=e57]: 
+            - text: Hasło
+          - generic [ref=e58]:
+            - textbox "Hasło" [ref=e59]
+            - button "Zmień widoczność hasła" [ref=e60] [cursor=pointer]:
+              - generic [ref=e61]: Zmień widoczność hasła
+              - generic [ref=e62]: 
+        - generic [ref=e64]:
+          - button "Zaloguj się" [ref=e65] [cursor=pointer]:
+            - generic [ref=e66]: 
+            - text: Zaloguj się
+          - link "Resetuj hasło" [ref=e67] [cursor=pointer]:
+            - /url: https://elogin.put.poznan.pl/app/password/reset/request
+          - link "Aktywuj eKonto" [ref=e68] [cursor=pointer]:
+            - /url: https://elogin.put.poznan.pl/app/account-activation
+      - separator [ref=e69]
+      - link "Logowanie certyfikatem" [ref=e71] [cursor=pointer]:
+        - /url: https://elogin.put.poznan.pl/app/login/certificate?redirect_path=%2Fapp%2Fdispatch%3Fplp_r_id%3D04c955e2c593af02191b5e0acf43f4d8
+        - generic [ref=e72]: 
+        - text: Logowanie certyfikatem
+      - generic [ref=e73]:
+        - heading "Pomoc" [level=2] [ref=e74]
+        - paragraph [ref=e75]:
+          - text: Problemy z logowaniem, aktywacją eKonta lub resetowaniem hasła prosimy zgłaszać na adres
+          - link "esupport@put.poznan.pl" [ref=e76] [cursor=pointer]:
+            - /url: mailto:esupport@put.poznan.pl
+          - text: . W treści zgłoszenia należy podać
+          - strong [ref=e77]: nazwę swojego konta
+          - text: .
+          - text: Przed wysłaniem zgłoszenia sprawdź
+          - link "odpowiedzi na najczęściej zadawane pytania" [ref=e78] [cursor=pointer]:
+            - /url: https://elogin.put.poznan.pl/app/help
+          - text: – być może znajdziesz tam rozwiązanie swojego problemu.
+        - heading "Ciasteczka (cookies)" [level=2] [ref=e79]
+        - generic [ref=e80]:
+          - paragraph [ref=e81]: Ciasteczka (ang. cookies) to niewielkie bloki danych, które wysyłane są do przeglądarki WWW, gdy odwiedzasz witrynę internetową. Serwis eLogin używa ciasteczek w celu zapamiętania uwierzytelnionej sesji użytkownika - dzięki temu nie jest konieczne ponowne logowanie się na każdej stronie serwisu eLogin.
+          - paragraph [ref=e82]:
+            - strong [ref=e83]: Korzystanie z serwisu eLogin wymaga włączonej obsługi ciasteczek.
+    - button "Przejdź do góry strony" [ref=e84] [cursor=pointer]:
+      - generic [ref=e85]: 
+      - generic [ref=e86]: Przejdź do góry strony
+  - contentinfo [ref=e87]:
+    - generic [ref=e88]:
+      - text: © Politechnika Poznańska
+      - time [ref=e89]: "2026"
+    - link "put.poznan.pl" [ref=e91] [cursor=pointer]:
+      - /url: https://put.poznan.pl

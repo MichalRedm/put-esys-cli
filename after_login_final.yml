@@ -1,0 +1,213 @@
+- generic [ref=e2]:
+  - status
+  - generic [ref=e3]:
+    - link "Przejdź do głównej zawartości" [ref=e4] [cursor=pointer]:
+      - /url: "#maincontent"
+    - generic [ref=e6]:
+      - banner [ref=e7]:
+        - generic [ref=e9]:
+          - link "PUT LMS eKursy" [ref=e11] [cursor=pointer]:
+            - /url: https://ekursy.put.poznan.pl
+            - img "PUT LMS eKursy" [ref=e12]
+          - generic [ref=e14]:
+            - button "Wyświetl okno bez nowych powiadomień" [ref=e16] [cursor=pointer]:
+              - generic [ref=e17]: 
+            - generic [ref=e20]:
+              - link "Menu użytkownika" [ref=e21] [cursor=pointer]:
+                - /url: "#"
+                - text: Michał Redmer
+                - text: 
+              - text:   
+            - link "Michał Redmer" [ref=e22] [cursor=pointer]:
+              - /url: https://ekursy.put.poznan.pl/user/profile.php?id=40120
+              - img "Michał Redmer" [ref=e23]
+      - banner [ref=e24]:
+        - navigation [ref=e25]:
+          - navigation [ref=e27]:
+            - menubar [ref=e28]:
+              - menuitem " Strona główna" [ref=e29] [cursor=pointer]
+              - menuitem "Kokpit" [ref=e30] [cursor=pointer]
+              - menuitem "Moje kursy" [ref=e31] [cursor=pointer]
+              - text: 
+          - generic [ref=e34]:
+            - generic [ref=e35]: 
+            - textbox "Wyszukaj kursy" [ref=e36]
+            - generic [ref=e37]: Wyszukaj kursy
+      - button "Otwórz szufladę bloków" [ref=e39] [cursor=pointer]:
+        - generic [ref=e40]: Otwórz szufladę bloków
+        - generic [ref=e42]: 
+        - text: 
+      - generic [ref=e46]:
+        - generic:
+          - region "Bloki":
+            - complementary "Bloki":
+              - heading "Bloki" [level=2] [ref=e47]
+        - main [ref=e48]:
+          - link "Pomiń kategorie kursów" [ref=e50] [cursor=pointer]:
+            - /url: "#skipcategories"
+          - generic [ref=e51]:
+            - heading "Kategorie kursów" [level=2] [ref=e52]
+            - generic [ref=e55]:
+              - generic [ref=e57]:
+                - link [ref=e58] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=2
+                - heading "WA" [level=3] [ref=e61]:
+                  - link "WA" [ref=e62] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=2
+              - generic [ref=e65]:
+                - link [ref=e66] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=3
+                - heading "WARiE" [level=3] [ref=e69]:
+                  - link "WARiE" [ref=e70] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=3
+              - generic [ref=e73]:
+                - link [ref=e74] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=4
+                - heading "WIiT" [level=3] [ref=e77]:
+                  - link "WIiT" [ref=e78] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=4
+              - generic [ref=e81]:
+                - link [ref=e82] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=5
+                - heading "WILiT" [level=3] [ref=e85]:
+                  - link "WILiT" [ref=e86] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=5
+              - generic [ref=e89]:
+                - link [ref=e90] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=6
+                - heading "WIMiFT" [level=3] [ref=e93]:
+                  - link "WIMiFT" [ref=e94] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=6
+              - generic [ref=e97]:
+                - link [ref=e98] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=7
+                - heading "WIM" [level=3] [ref=e101]:
+                  - link "WIM" [ref=e102] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=7
+              - generic [ref=e105]:
+                - link [ref=e106] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=8
+                - heading "WIŚiE" [level=3] [ref=e109]:
+                  - link "WIŚiE" [ref=e110] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=8
+              - generic [ref=e113]:
+                - link [ref=e114] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=10
+                - heading "WIZ" [level=3] [ref=e117]:
+                  - link "WIZ" [ref=e118] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=10
+              - generic [ref=e121]:
+                - link [ref=e122] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=9
+                - heading "WTCH" [level=3] [ref=e125]:
+                  - link "WTCH" [ref=e126] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=9
+              - generic [ref=e129]:
+                - link [ref=e130] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=2830
+                - heading "Instytut Matematyki" [level=3] [ref=e133]:
+                  - link "Instytut Matematyki" [ref=e134] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=2830
+              - generic [ref=e137]:
+                - link [ref=e138] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=11
+                - heading "Biblioteka" [level=3] [ref=e141]:
+                  - link "Biblioteka" [ref=e142] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=11
+              - generic [ref=e145]:
+                - link [ref=e146] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=12
+                - heading "CJK" [level=3] [ref=e149]:
+                  - link "CJK" [ref=e150] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=12
+              - generic [ref=e153]:
+                - link [ref=e154] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=13
+                - heading "CKL" [level=3] [ref=e157]:
+                  - link "CKL" [ref=e158] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=13
+              - generic [ref=e161]:
+                - link [ref=e162] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=311
+                - heading "CS" [level=3] [ref=e165]:
+                  - link "CS" [ref=e166] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=311
+              - generic [ref=e169]:
+                - link [ref=e170] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=14
+                - heading "BHP" [level=3] [ref=e173]:
+                  - link "BHP" [ref=e174] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=14
+              - generic [ref=e177]:
+                - link [ref=e178] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1332
+                - heading "Samorząd Studencki" [level=3] [ref=e181]:
+                  - link "Samorząd Studencki" [ref=e182] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1332
+              - generic [ref=e185]:
+                - link [ref=e186] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1344
+                - heading "Szkoła Doktorska" [level=3] [ref=e189]:
+                  - link "Szkoła Doktorska" [ref=e190] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1344
+              - generic [ref=e193]:
+                - link [ref=e194] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1087
+                - heading "Punkt pomocy psychologicznej" [level=3] [ref=e197]:
+                  - link "Punkt pomocy psychologicznej" [ref=e198] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1087
+              - generic [ref=e201]:
+                - link [ref=e202] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1584
+                - heading "Akademicki Inkubator Przedsiębiorczości" [level=3] [ref=e205]:
+                  - link "Akademicki Inkubator Przedsiębiorczości" [ref=e206] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=1584
+              - generic [ref=e209]:
+                - link [ref=e210] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=2997
+                - heading "Dostępność" [level=3] [ref=e213]:
+                  - link "Dostępność" [ref=e214] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=2997
+              - generic [ref=e217]:
+                - link [ref=e218] [cursor=pointer]:
+                  - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=15
+                - heading "Inne" [level=3] [ref=e221]:
+                  - link "Inne" [ref=e222] [cursor=pointer]:
+                    - /url: https://ekursy.put.poznan.pl/course/index.php?categoryid=15
+          - generic [ref=e228]:
+            - generic [ref=e229]: Wyszukaj kursy
+            - textbox "Wyszukaj kursy" [ref=e230]
+            - button "Wyszukaj kursy" [ref=e232] [cursor=pointer]:
+              - generic [ref=e233]: 
+              - generic [ref=e234]: Wyszukaj kursy
+          - button "" [ref=e236] [cursor=pointer]:
+            - generic [ref=e237]: 
+          - text:      
+        - generic:
+          - generic:
+            - complementary "Bloki":
+              - heading "Bloki" [level=2] [ref=e238]
+      - contentinfo [ref=e239]:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - complementary "Bloki":
+                    - heading "Bloki" [level=2] [ref=e240]
+              - generic:
+                - generic:
+                  - complementary "Bloki":
+                    - heading "Bloki" [level=2] [ref=e241]
+              - generic:
+                - generic:
+                  - complementary "Bloki":
+                    - heading "Bloki" [level=2] [ref=e242]
+              - generic:
+                - generic:
+                  - complementary "Bloki":
+                    - heading "Bloki" [level=2] [ref=e243]
+        - generic [ref=e249]:
+          - text: © Politechnika Poznańska
+          - link "put.poznan.pl" [ref=e250] [cursor=pointer]:
+            - /url: https://www.put.poznan.pl
