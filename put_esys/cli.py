@@ -1,61 +1,102 @@
 import typer
 from typing import Optional
-from .auth import authenticate, AuthError
+from .auth import authenticate, ensure_authenticated_session
 from .scraper import get_ekursy_courses
-from dotenv import load_dotenv
-import os
+from .config import save_credentials, load_credentials, clear_credentials
+from rich.console import Console
+from rich.table import Table
 
 app = typer.Typer(help="PUT Electronic Systems CLI")
+config_app = typer.Typer(help="Manage your PUT credentials")
+app.add_typer(config_app, name="config")
+
+console = Console()
+
+@config_app.command("set")
+def config_set():
+    """Set your PUT credentials."""
+    username = typer.prompt("PUT email (e.g. jan.kowalski@student.put.poznan.pl)")
+    password = typer.prompt("PUT password", hide_input=True)
+    save_credentials(username, password)
+    console.print("[green]Credentials saved successfully.[/green]")
+
+@config_app.command("show")
+def config_show():
+    """Show current configuration (password masked)."""
+    creds = load_credentials()
+    if not creds:
+        console.print("[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]")
+        return
+    
+    table = Table(title="PUT CLI Configuration")
+    table.add_column("Key", style="cyan")
+    table.add_column("Value", style="magenta")
+    
+    table.add_row("Username", creds['username'])
+    table.add_row("Password", "*" * 8)
+    
+    console.print(table)
+
+@config_app.command("delete")
+def config_delete():
+    """Remove stored credentials."""
+    if typer.confirm("Are you sure you want to delete your stored credentials?"):
+        clear_credentials()
+        console.print("[red]Credentials deleted.[/red]")
 
 @app.command()
 def login(
-    username: Optional[str] = typer.Option(None, help="Your eLogin username"),
-    password: Optional[str] = typer.Option(None, help="Your eLogin password", hide_input=True)
+    username: Optional[str] = typer.Option(None, help="PUT username"),
+    password: Optional[str] = typer.Option(None, help="PUT password", hide_input=True),
 ):
-    """
-    Authenticate with PUT eLogin and save the session.
-    """
-    # Load from .env if not provided
-    load_dotenv()
-    if not username:
-        username = os.getenv("ELOGIN_USERNAME")
-    if not password:
-        password = os.getenv("ELOGIN_PASSWORD")
-    
+    """Authenticate with PUT eLogin systems."""
     if not username or not password:
-        typer.echo("Error: Username and password are required.")
-        raise typer.Exit(code=1)
-    
-    typer.echo(f"Logging in as {username}...")
+        creds = load_credentials()
+        if creds:
+            username = username or creds['username']
+            password = password or creds['password']
+        else:
+            console.print("[yellow]No credentials provided and none stored. Run 'put-esys config set' or provide options.[/yellow]")
+            return
+
+    console.print(f"Logging in as [bold]{username}[/bold]...")
     try:
         authenticate(username, password)
-        typer.echo("Successfully authenticated and session saved.")
-    except AuthError as e:
-        typer.echo(f"Login failed: {e}")
+        console.print("[green]Successfully authenticated and session saved.[/green]")
+    except Exception as e:
+        console.print(f"[red]Login failed: {e}[/red]")
         raise typer.Exit(code=1)
 
 @app.command()
 def ekursy():
-    """
-    List your courses from eKursy.
-    """
-    typer.echo("Fetching courses from eKursy...")
-    courses, error = get_ekursy_courses()
+    """List enrolled courses from eKursy."""
+    console.print("Fetching courses from eKursy...")
     
-    if error:
-        typer.echo(f"Error: {error}")
+    # Use lazy authentication
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        console.print("Please run [bold]put-esys config set[/bold] first to save your credentials.")
         raise typer.Exit(code=1)
-    
+        
+    courses, error = get_ekursy_courses(session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(code=1)
+
     if not courses:
-        typer.echo("No courses found or could not parse course list.")
+        console.print("[yellow]No courses found or could not parse course list.[/yellow]")
         return
 
-    typer.echo(f"Found {len(courses)} courses:")
-    for i, course in enumerate(courses, 1):
-        typer.echo(f"{i}. {course['title']} ({course['url']})")
+    table = Table(title=f"Enrolled Courses ({len(courses)})")
+    table.add_column("#", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Course Title", style="magenta")
+    table.add_column("URL", style="blue")
 
-def main():
-    app()
+    for i, course in enumerate(courses, 1):
+        table.add_row(str(i), course['title'], course['url'])
+
+    console.print(table)
 
 if __name__ == "__main__":
-    main()
+    app()

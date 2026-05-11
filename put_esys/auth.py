@@ -61,3 +61,37 @@ def get_authenticated_session():
     session.headers.update({"User-Agent": USER_AGENT})
     session.cookies.update(cookies)
     return session
+
+def ensure_authenticated_session():
+    """
+    Ensures we have a valid session. If not, tries to log in using stored credentials.
+    """
+    from .config import load_credentials
+    
+    session = get_authenticated_session()
+    
+    # Check if session is valid by hitting the dashboard
+    is_valid = False
+    if session:
+        try:
+            resp = session.get("https://ekursy.put.poznan.pl/", timeout=10)
+            if "Logowanie" not in resp.text and "login" not in resp.url:
+                is_valid = True
+        except:
+            pass
+            
+    if is_valid:
+        return session
+        
+    # Not valid, try to log in using stored credentials
+    creds = load_credentials()
+    if not creds:
+        return None
+        
+    try:
+        if authenticate(creds['username'], creds['password']):
+            return get_authenticated_session()
+    except:
+        pass
+        
+    return None

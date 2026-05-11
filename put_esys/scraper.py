@@ -2,10 +2,12 @@ import re
 from bs4 import BeautifulSoup
 from .auth import get_authenticated_session
 
-def get_ekursy_courses():
-    session = get_authenticated_session()
+def get_ekursy_courses(session=None):
     if not session:
-        return None, "Not authenticated. Please run 'login' first."
+        session = get_authenticated_session()
+    
+    if not session:
+        return None, "Not authenticated. Please run 'login' or 'config set' first."
     
     # 1. Get dashboard to find user ID
     try:

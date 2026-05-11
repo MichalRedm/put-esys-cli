@@ -23,19 +23,19 @@ Currently supports:
 
 ## Configuration
 
-Create a `.env` file in the root directory with your PUT credentials:
-```env
-ELOGIN_USERNAME=your.email@student.put.poznan.pl
-ELOGIN_PASSWORD=your_password
+Instead of manually editing files, use the CLI to securely store your credentials:
+```bash
+put-esys config set
 ```
+This will prompt you for your PUT email and password. Your credentials are stored locally in `~/.put-esys/config.json`.
+
+You can also manage your configuration:
+- **Show config**: `put-esys config show` (password is masked)
+- **Delete config**: `put-esys config delete`
 
 ## Usage
 
-### Authentication
-Login to the system (required once or when session expires):
-```bash
-put-esys login
-```
+The CLI handles authentication automatically. Once configured, you can directly run resource commands:
 
 ### eKursy
 List all your enrolled courses:
@@ -43,6 +43,12 @@ List all your enrolled courses:
 put-esys ekursy
 ```
 
+### Manual Login (Optional)
+If you need to force a session refresh or test your credentials:
+```bash
+put-esys login
+```
+
 ## Security
 
-Authentication data is stored locally in `~/.put-esys/session.json`. Your credentials in `.env` are only used by the `login` command and are never shared.
+Authentication data (cookies) is stored in `~/.put-esys/session.json`. Your credentials are stored in `~/.put-esys/config.json`. These files are local to your user directory and are ignored by version control.
