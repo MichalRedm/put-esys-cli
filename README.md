@@ -1,5 +1,7 @@
 # PUT Electronic Systems CLI (put-esys)
 
+[![CI](https://github.com/MichalRedm/put-esys-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/MichalRedm/put-esys-cli/actions/workflows/ci.yml)
+
 A command-line interface for accessing various electronic systems of Poznań University of Technology (PUT).
 
 Currently supports:
