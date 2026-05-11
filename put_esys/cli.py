@@ -144,5 +144,41 @@ def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL"))
             
     console.print(tree)
 
+@app.command()
+def save(
+    url: str = typer.Argument(..., help="URL to save"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename"),
+):
+    """Save a page from any PUT system as an HTML file."""
+    import re
+    
+    if not output:
+        # Create a simple filename from the URL
+        slug = re.sub(r'[^a-zA-Z0-9]', '_', url.replace('https://', '').replace('http://', ''))
+        output = f"{slug[:50]}.html"
+
+    console.print(f"Fetching [blue]{url}[/blue]...")
+    
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[yellow]Warning: Not authenticated. Attempting to fetch without session.[/yellow]")
+        session = requests.Session()
+        session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+    
+    try:
+        resp = session.get(url)
+        # Check if we were redirected to a login page
+        if "elogin.put.poznan.pl" in resp.url and "elogin.put.poznan.pl" not in url:
+             console.print("[yellow]Detected redirection to eLogin. The current session might not be valid for this system.[/yellow]")
+             console.print("[hint]Try running 'put-esys login' or ensuring your credentials are set correctly.[/hint]")
+        
+        with open(output, "w", encoding="utf-8") as f:
+            f.write(resp.text)
+        
+        console.print(f"[green]Successfully saved to [bold]{output}[/bold][/green]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
 if __name__ == "__main__":
     app()
