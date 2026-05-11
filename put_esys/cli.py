@@ -98,5 +98,51 @@ def ekursy():
 
     console.print(table)
 
+@app.command()
+def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
+    """Show content of a specific course."""
+    import re
+    from rich.tree import Tree
+    
+    # Extract ID if URL is provided
+    course_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            course_id = match.group(1)
+        else:
+            console.print("[red]Could not parse course ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    console.print(f"Fetching content for course [bold]{course_id}[/bold]...")
+    
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        console.print("Please run [bold]put-esys config set[/bold] first.")
+        raise typer.Exit(code=1)
+        
+    from .scraper import get_course_content
+    content, error = get_course_content(course_id, session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(code=1)
+
+    tree = Tree(f"[bold white on blue] {content['title']} [/bold white on blue]")
+    
+    for section in content['sections']:
+        section_tree = tree.add(f"[bold cyan]{section['name']}[/bold cyan]")
+        for activity in section['activities']:
+            icon = "[FILE]"
+            if activity['type'] == 'folder': icon = "[DIR]"
+            elif activity['type'] == 'assign': icon = "[ASSIGN]"
+            elif activity['type'] == 'quiz': icon = "[QUIZ]"
+            elif activity['type'] == 'forum': icon = "[FORUM]"
+            elif activity['type'] == 'url': icon = "[URL]"
+            
+            section_tree.add(f"{icon} [magenta]{activity['name']}[/magenta] ([blue]{activity['url']}[/blue])")
+            
+    console.print(tree)
+
 if __name__ == "__main__":
     app()

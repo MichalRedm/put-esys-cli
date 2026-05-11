@@ -85,3 +85,68 @@ def get_ekursy_courses(session=None):
                         })
     
     return courses, None
+
+def get_course_content(course_id, session=None):
+    if not session:
+        session = get_authenticated_session()
+    
+    if not session:
+        return None, "Not authenticated."
+    
+    url = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}"
+    try:
+        resp = session.get(url)
+        resp.raise_for_status()
+    except Exception as e:
+        return None, f"Failed to access course page: {e}"
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    
+    course_title = soup.find('h1').get_text(strip=True) if soup.find('h1') else "Unknown Course"
+    
+    sections = []
+    # eKursy uses several formats, but sections are usually li.section
+    for section_li in soup.select('li.section'):
+        # Section name can be in various places depending on format
+        name_tag = section_li.select_one('h3.sectionname')
+        if not name_tag:
+             # Try fallback for "General" or other structures
+             name_tag = section_li.select_one('.section-title')
+             
+        section_name = name_tag.get_text(strip=True) if name_tag else f"Section {section_li.get('id', '?')}"
+        
+        activities = []
+        for activity_li in section_li.select('li.activity'):
+             # Activity name and link
+             a_tag = activity_li.select_one('div.activityname a')
+             if a_tag:
+                 # Clean up lambda2 specific hidden spans
+                 for span in a_tag.find_all('span', class_='accesshide'):
+                     span.decompose()
+                 
+                 name = a_tag.get_text(strip=True)
+                 link = a_tag['href']
+                 
+                 # Try to identify type from classes (modtype_...)
+                 activity_type = "unknown"
+                 for cls in activity_li.get('class', []):
+                     if cls.startswith('modtype_'):
+                         activity_type = cls.replace('modtype_', '')
+                         break
+                 
+                 activities.append({
+                     'name': name,
+                     'url': link,
+                     'type': activity_type
+                 })
+        
+        if activities or (name_tag and section_name):
+            sections.append({
+                'name': section_name,
+                'activities': activities
+            })
+            
+    return {
+        'title': course_title,
+        'sections': sections
+    }, None
