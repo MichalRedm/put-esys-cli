@@ -185,9 +185,8 @@ def get_quiz_info(quiz_id, session=None):
     grading_method = grading_info.get_text(strip=True) if grading_info else "Unknown"
     
     attempts = []
-    # Attempts can be in a table or a list of cards in newer Moodle/Lambda themes
-    # Check for cards first (as seen in the retrieved HTML)
-    attempt_cards = soup.select('.quizreviewsummary')
+    # Attempts can be in a table or a list of cards
+    attempt_cards = soup.select('.generaltable.quizreviewsummary')
     for card in attempt_cards:
         attempt_data = {}
         for row in card.select('tr'):
@@ -202,6 +201,24 @@ def get_quiz_info(quiz_id, session=None):
         header = card.find_previous('h4', class_='card-title')
         if header:
             attempt_data['number'] = header.get_text(strip=True)
+            
+        # Look for Review link
+        review_link = (
+            card.find_parent('div', class_='card').find('a', string='Review') 
+            if card.find_parent('div', class_='card') 
+            else None
+        )
+        if not review_link:
+             # Try finding in the next div
+             review_link = card.find_next('a', string='Review')
+             
+        if review_link:
+            href = review_link.get('href')
+            attempt_data['review_url'] = href
+            import re
+            match = re.search(r'attempt=(\d+)', href)
+            if match:
+                attempt_data['id'] = match.group(1)
         
         attempts.append(attempt_data)
         
@@ -220,4 +237,68 @@ def get_quiz_info(quiz_id, session=None):
         'grading_method': grading_method,
         'attempts': attempts,
         'buttons': buttons
+    }, None
+
+def get_quiz_attempt(quiz_id, attempt_id, session=None):
+    if not session:
+        session = get_authenticated_session()
+    
+    if not session:
+        return None, "Not authenticated."
+    
+    url = f"https://ekursy.put.poznan.pl/mod/quiz/review.php?attempt={attempt_id}&cmid={quiz_id}"
+    try:
+        resp = session.get(url)
+        resp.raise_for_status()
+    except Exception as e:
+        return None, f"Failed to access attempt page: {e}"
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    
+    questions = []
+    for que_div in soup.select('.que'):
+        q_no_el = que_div.select_one('.qno')
+        q_no = q_no_el.get_text(strip=True) if q_no_el else "?"
+        
+        q_state_el = que_div.select_one('.state')
+        q_state = q_state_el.get_text(strip=True) if q_state_el else ""
+        
+        q_text_el = que_div.select_one('.qtext')
+        q_text = q_text_el.get_text(strip=True) if q_text_el else ""
+        
+        # Extract answer
+        # Essay
+        answer_div = que_div.select_one('.qtype_essay_response') or que_div.select_one('.answer')
+        answer = answer_div.get_text(strip=True) if answer_div else "No answer found"
+        
+        # Multiple choice / true-false
+        # If it's a list of options
+        options = []
+        for option_div in que_div.select('.answer > div'):
+             label = option_div.find('label')
+             if label:
+                  is_selected = 'checked' in str(option_div) or 'selected' in str(option_div)
+                  options.append({
+                       'text': label.get_text(strip=True),
+                       'selected': is_selected
+                  })
+        
+        if options:
+             # Join options into a single string for simplicity or keep as list
+             answer = "\n".join([
+                 f"{'[x]' if opt['selected'] else '[ ]'} {opt['text']}" 
+                 for opt in options
+             ])
+
+        questions.append({
+            'number': q_no,
+            'state': q_state,
+            'text': q_text,
+            'answer': answer
+        })
+        
+    return {
+        'quiz_id': quiz_id,
+        'attempt_id': attempt_id,
+        'questions': questions
     }, None

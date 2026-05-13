@@ -27,6 +27,7 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys ekursy`: List all enrolled courses with their IDs and URLs.
 - `put-esys course <ID_OR_URL>`: Display the content (sections and activities) of a specific course.
 - `put-esys quiz <ID_OR_URL>`: Show status and attempts for a specific quiz.
+- `put-esys attempt <QUIZ_ID> <ATTEMPT_ID>`: View questions and answers for a specific quiz attempt.
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Download a page from a PUT system as an HTML file.
@@ -46,6 +47,11 @@ put-esys course 12345
 ### Checking quiz status
 ```bash
 put-esys quiz 2129129
+```
+
+### Viewing a quiz attempt
+```bash
+put-esys attempt 2089015 1178826
 ```
 
 ### Saving a course page

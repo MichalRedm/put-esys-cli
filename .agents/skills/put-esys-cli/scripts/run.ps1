@@ -11,5 +11,4 @@ if (-not (Test-Path $PythonExe)) {
     exit 1
 }
 
-$MainPath = Join-Path $PSScriptRoot "..\..\..\..\put_esys\main.py"
-& $PythonExe $MainPath @Args
+& $PythonExe -m put_esys.main @Args

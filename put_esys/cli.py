@@ -2,6 +2,7 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from .auth import authenticate, ensure_authenticated_session
@@ -245,6 +246,7 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
     else:
         table = Table(title="Your Attempts")
         table.add_column("Attempt", style="cyan")
+        table.add_column("ID", style="yellow")
         table.add_column("Status", style="magenta")
         table.add_column("Started", style="blue")
         table.add_column("Grade", style="green")
@@ -252,6 +254,7 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
         for att in info['attempts']:
             table.add_row(
                 att.get('number', '1'),
+                att.get('id', 'N/A'),
                 att.get('status', 'Unknown'),
                 att.get('started', 'Unknown'),
                 att.get('grade', 'N/A')
@@ -262,6 +265,27 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
         console.print("\n[bold]Available Actions:[/bold]")
         for btn in info['buttons']:
             console.print(f" - {btn['text']}: [blue]{btn['url']}[/blue]")
+
+@app.command()
+def attempt(quiz_id: str, attempt_id: str):
+    """View a particular quiz attempt (questions and answers)."""
+    console.print(f"Fetching attempt [bold]{attempt_id}[/bold] for quiz [bold]{quiz_id}[/bold]...")
+    
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+        
+    from .scraper import get_quiz_attempt
+    info, error = get_quiz_attempt(quiz_id, attempt_id, session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(code=1)
+
+    for q in info['questions']:
+        console.print(f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['state']})")
+        console.print(Panel(q['text'], title="Question Text", border_style="blue"))
+        console.print(Panel(q['answer'], title="Your Answer", border_style="green"))
 
 if __name__ == "__main__":
     app()

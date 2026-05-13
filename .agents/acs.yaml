@@ -1,0 +1,9 @@
+name: "put-esys-cli"
+version: "1.0"
+description: "A CLI tool for accessing electronic systems of Poznań University of Technology."
+layers:
+  rules: "./rules"
+  context: "./context"
+metadata:
+  primary_agent: "Antigravity"
+  objective: "Develop a robust CLI utility for authenticating and scraping PUT electronic systems like eKursy."

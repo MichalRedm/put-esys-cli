@@ -16,5 +16,4 @@ if [ ! -f "$PYTHON_EXE" ]; then
     fi
 fi
 
-MAIN_PATH="$PROJECT_ROOT/put_esys/main.py"
-"$PYTHON_EXE" "$MAIN_PATH" "$@"
+"$PYTHON_EXE" -m put_esys.main "$@"
