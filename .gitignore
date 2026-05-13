@@ -156,7 +156,15 @@ cython_debug/
 .idea/
 
 # AI Assistant files
-.agents/
+.agents/*
+!.agents/acs.yaml
+!.agents/project_context.md
+!.agents/rules/
+!.agents/context/
+!.agents/skills/
+.agents/archive/
+.agents/memory.md
+
 .gemini/
 .playwright-cli/
 session_cookies.json
