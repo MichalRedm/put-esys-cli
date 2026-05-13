@@ -1,0 +1,66 @@
+---
+name: put-esys-cli
+description: CLI tool for Poznań University of Technology (PUT) electronic systems
+---
+
+# PUT Electronic Systems CLI Skill
+
+This skill provides instructions and examples for using the `put-esys` CLI tool to interact with PUT systems like eKursy.
+
+## Prerequisites
+- Python 3.9+
+- Virtual environment: `.venv` (recommended)
+- Installed dependencies: `pip install -e .`
+- Configured credentials: `put-esys config set`
+
+## Commands
+
+### Configuration
+- `put-esys config set`: Interactive prompt to save PUT email and password.
+- `put-esys config show`: Display current configuration (username only).
+- `put-esys config delete`: Remove stored credentials.
+
+### Authentication
+- `put-esys login`: Manually trigger authentication and refresh the session.
+
+### eKursy
+- `put-esys ekursy`: List all enrolled courses with their IDs and URLs.
+- `put-esys course <ID_OR_URL>`: Display the content (sections and activities) of a specific course.
+
+### General
+- `put-esys save <URL> [--output FILENAME]`: Download a page from a PUT system as an HTML file.
+
+## Examples
+
+### Listing courses
+```bash
+put-esys ekursy
+```
+
+### Viewing course content
+```bash
+put-esys course 12345
+```
+
+### Saving a course page
+```bash
+put-esys save "https://ekursy.put.poznan.pl/course/view.php?id=12345" -o my_course.html
+```
+
+## Usage with Helper Scripts
+
+If you haven't installed the `put-esys` command globally or want to ensure it runs within the project's virtual environment, you can use the provided helper scripts:
+
+- **Windows (PowerShell)**:
+  ```powershell
+  .agents/skills/put-esys-cli/scripts/run.ps1 ekursy
+  ```
+- **Linux/macOS/Git Bash**:
+  ```bash
+  .agents/skills/put-esys-cli/scripts/run.sh ekursy
+  ```
+
+## Troubleshooting
+- If commands fail with authentication errors, try running `put-esys login` to refresh the session.
+- Ensure your credentials are correct by running `put-esys config show`.
+- If the `put-esys` command is not found, use the helper scripts mentioned above or `python -m put_esys.main` after activating the virtual environment.
