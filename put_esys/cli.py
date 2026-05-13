@@ -209,5 +209,59 @@ def save(
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(code=1)
 
+@app.command()
+def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
+    """Show status and attempts for a specific quiz."""
+    import re
+    
+    # Extract ID if URL is provided
+    quiz_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            quiz_id = match.group(1)
+        else:
+            console.print("[red]Could not parse quiz ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    console.print(f"Fetching info for quiz [bold]{quiz_id}[/bold]...")
+    
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+        
+    from .scraper import get_quiz_info
+    info, error = get_quiz_info(quiz_id, session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"\n[bold white on blue] {info['title']} [/bold white on blue]")
+    console.print(f"[bold]{info['grading_method']}[/bold]\n")
+
+    if not info['attempts']:
+        console.print("[yellow]No attempts found for this quiz.[/yellow]")
+    else:
+        table = Table(title="Your Attempts")
+        table.add_column("Attempt", style="cyan")
+        table.add_column("Status", style="magenta")
+        table.add_column("Started", style="blue")
+        table.add_column("Grade", style="green")
+
+        for att in info['attempts']:
+            table.add_row(
+                att.get('number', '1'),
+                att.get('status', 'Unknown'),
+                att.get('started', 'Unknown'),
+                att.get('grade', 'N/A')
+            )
+        console.print(table)
+
+    if info['buttons']:
+        console.print("\n[bold]Available Actions:[/bold]")
+        for btn in info['buttons']:
+            console.print(f" - {btn['text']}: [blue]{btn['url']}[/blue]")
+
 if __name__ == "__main__":
     app()

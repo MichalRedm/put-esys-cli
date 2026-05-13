@@ -163,3 +163,61 @@ def get_course_content(course_id, session=None):
         'title': course_title,
         'sections': sections
     }, None
+def get_quiz_info(quiz_id, session=None):
+    if not session:
+        session = get_authenticated_session()
+    
+    if not session:
+        return None, "Not authenticated."
+    
+    url = f"https://ekursy.put.poznan.pl/mod/quiz/view.php?id={quiz_id}"
+    try:
+        resp = session.get(url)
+        resp.raise_for_status()
+    except Exception as e:
+        return None, f"Failed to access quiz page: {e}"
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    
+    title = soup.find('h1').get_text(strip=True) if soup.find('h1') else "Unknown Quiz"
+    
+    grading_info = soup.select_one('.quizinfo p')
+    grading_method = grading_info.get_text(strip=True) if grading_info else "Unknown"
+    
+    attempts = []
+    # Attempts can be in a table or a list of cards in newer Moodle/Lambda themes
+    # Check for cards first (as seen in the retrieved HTML)
+    attempt_cards = soup.select('.quizreviewsummary')
+    for card in attempt_cards:
+        attempt_data = {}
+        for row in card.select('tr'):
+            th = row.find('th')
+            td = row.find('td')
+            if th and td:
+                key = th.get_text(strip=True).lower()
+                val = td.get_text(strip=True)
+                attempt_data[key] = val
+        
+        # Look for attempt number in the heading above the table
+        header = card.find_previous('h4', class_='card-title')
+        if header:
+            attempt_data['number'] = header.get_text(strip=True)
+        
+        attempts.append(attempt_data)
+        
+    # Check for buttons
+    buttons = []
+    for form in soup.select('.quizstartbuttondiv form'):
+        btn = form.find('button')
+        if btn:
+            buttons.append({
+                'text': btn.get_text(strip=True),
+                'url': form.get('action')
+            })
+
+    return {
+        'title': title,
+        'grading_method': grading_method,
+        'attempts': attempts,
+        'buttons': buttons
+    }, None
