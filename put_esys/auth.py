@@ -23,9 +23,11 @@ def authenticate(username, password):
     csrf_token = soup.find('input', {'name': 'csrf_token'}).get('value')
     
     # 2. elogin login POST
+    # We post to the URL we are currently on (which contains the redirect_path)
+    login_url = resp.url
     resp = session.post(
-        "https://elogin.put.poznan.pl/app/login",
-        data={'username': username, 'password': password, 'csrf_token': csrf_token, 'send': ''},
+        login_url,
+        data={'login': username, 'password': password, 'csrf_token': csrf_token, 'send': ''},
         headers={"Referer": resp.url}
     )
 
@@ -34,12 +36,12 @@ def authenticate(username, password):
     for _ in range(5):
         soup = BeautifulSoup(resp.text, 'html.parser')
         # Look for any form that is submitted via JS (common in SSO)
-        # Form might have id 'redirectForm' or name 'frm' or just be the only form
-        form = soup.find('form', {'id': 'redirectForm'}) or soup.find('form', {'name': 'frm'})
+        form = (
+            soup.find('form', {'id': 'redirectForm'}) or 
+            soup.find('form', {'name': 'frm'}) or
+            soup.find('form')
+        )
         
-        if not form and "document.frm.submit()" in resp.text:
-             form = soup.find('form')
-             
         if form:
             action = form.get('action')
             if not action:
@@ -51,6 +53,14 @@ def authenticate(username, password):
                 for inp in form.find_all('input', {'type': 'hidden'})
                 if inp.get('name')
             }
+            
+            # If no hidden inputs, maybe they are just normal inputs (like in our debug dump)
+            if not form_data:
+                form_data = {
+                    inp.get('name'): inp.get('value', '')
+                    for inp in form.find_all('input')
+                    if inp.get('name')
+                }
             
             # Post the form
             resp = session.post(action_url, data=form_data, headers={"Referer": resp.url})
@@ -64,7 +74,11 @@ def authenticate(username, password):
         save_session(all_cookies)
         return True
     else:
-        raise AuthError(f"Authentication failed. MoodleSession not found. Final URL: {resp.url}")
+        # Check for error message in the final page if it failed
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        error_msg = soup.find(class_=lambda x: x and 'alert' in x)
+        error_text = error_msg.get_text(strip=True) if error_msg else "Unknown error"
+        raise AuthError(f"Authentication failed: {error_text}. Final URL: {resp.url}")
 
 def get_authenticated_session():
     cookies = load_session()
