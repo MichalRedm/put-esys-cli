@@ -1,13 +1,26 @@
 from typing import Optional
 
 import typer
+from markdownify import markdownify
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
 from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
 from .scraper import get_ekursy_courses
+
+import sys
+import io
+
+# Fix UnicodeEncodeError on Windows by forcing UTF-8 if necessary
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except (AttributeError, io.UnsupportedOperation):
+        # Fallback for older python versions or specific environments
+        pass
 
 app = typer.Typer(help="PUT Electronic Systems CLI")
 config_app = typer.Typer(help="Manage your PUT credentials")
@@ -284,8 +297,12 @@ def attempt(quiz_id: str, attempt_id: str):
 
     for q in info['questions']:
         console.print(f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['state']})")
-        console.print(Panel(q['text'], title="Question Text", border_style="blue"))
-        console.print(Panel(q['answer'], title="Your Answer", border_style="green"))
+        
+        q_md = Markdown(markdownify(q['text']))
+        a_md = Markdown(markdownify(q['answer']))
+        
+        console.print(Panel(q_md, title="Question Text", border_style="blue"))
+        console.print(Panel(a_md, title="Your Answer", border_style="green"))
 
 if __name__ == "__main__":
     app()

@@ -299,7 +299,7 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
         q_state = q_state_el.get_text(strip=True) if q_state_el else ""
         
         q_text_el = que_div.select_one('.qtext')
-        q_text = q_text_el.get_text(strip=True) if q_text_el else ""
+        q_text_html = str(q_text_el) if q_text_el else ""
         
         # Extract answer
         # Essay
@@ -311,9 +311,11 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
         # For in-progress attempts, it might be in a textarea
         textarea = que_div.find('textarea')
         if textarea:
-             answer = textarea.get_text(strip=True)
+             # If it's a textarea, it's already "plain" text but usually with HTML 
+             # entities or formatting.
+             answer_html = textarea.get_text(strip=True)
         else:
-             answer = answer_div.get_text(strip=True) if answer_div else "No answer found"
+             answer_html = str(answer_div) if answer_div else "No answer found"
         
         # Multiple choice / true-false
         # If it's a list of options
@@ -331,17 +333,18 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
                   })
         
         if options:
-             # Join options into a single string for simplicity or keep as list
-             answer = "\n".join([
-                 f"{'[x]' if opt['selected'] else '[ ]'} {opt['text']}" 
-                 for opt in options
-             ])
+             # Convert options to a simple HTML list for markdownify to handle
+             opt_list = []
+             for opt in options:
+                  marker = "<b>[x]</b>" if opt['selected'] else "[ ]"
+                  opt_list.append(f"<li>{marker} {opt['text']}</li>")
+             answer_html = f"<ul>{''.join(opt_list)}</ul>"
 
         questions.append({
             'number': q_no,
             'state': q_state,
-            'text': q_text,
-            'answer': answer
+            'text': q_text_html,
+            'answer': answer_html
         })
         
     return {
