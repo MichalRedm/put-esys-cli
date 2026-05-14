@@ -1,3 +1,5 @@
+import io
+import sys
 from typing import Optional
 
 import typer
@@ -10,9 +12,6 @@ from rich.table import Table
 from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
 from .scraper import get_ekursy_courses
-
-import sys
-import io
 
 # Fix UnicodeEncodeError on Windows by forcing UTF-8 if necessary
 if sys.stdout.encoding != 'utf-8':
@@ -295,11 +294,23 @@ def attempt(quiz_id: str, attempt_id: str):
         console.print(f"[red]Error: {error}[/red]")
         raise typer.Exit(code=1)
 
+    import re
+
     for q in info['questions']:
         console.print(f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['state']})")
         
-        q_md = Markdown(markdownify(q['text']))
-        a_md = Markdown(markdownify(q['answer']))
+        # Convert HTML to markdown
+        q_md_raw = markdownify(q['text'])
+        a_md_raw = markdownify(q['answer'])
+        
+        # Post-process to show URLs explicitly: [Text](URL) -> Text (URL)
+        # Using a regex that handles basic markdown links
+        link_pattern = r'\[([^\]]+)\]\((https?://[^\)]+)\)'
+        q_md_text = re.sub(link_pattern, r'\1 (\2)', q_md_raw)
+        a_md_text = re.sub(link_pattern, r'\1 (\2)', a_md_raw)
+
+        q_md = Markdown(q_md_text)
+        a_md = Markdown(a_md_text)
         
         console.print(Panel(q_md, title="Question Text", border_style="blue"))
         console.print(Panel(a_md, title="Your Answer", border_style="green"))
