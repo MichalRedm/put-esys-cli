@@ -17,6 +17,7 @@ from .scraper import (
     get_quiz_attempt,
     get_quiz_info,
     save_quiz_answer,
+    start_quiz_attempt,
 )
 
 # Fix UnicodeEncodeError on Windows by forcing UTF-8 if necessary
@@ -29,7 +30,12 @@ if sys.stdout.encoding != 'utf-8':
 
 app = typer.Typer(help="PUT Electronic Systems CLI")
 config_app = typer.Typer(help="Manage your PUT credentials")
+course_app = typer.Typer(help="Manage courses and content")
+quiz_app = typer.Typer(help="Manage quizzes and attempts")
+
 app.add_typer(config_app, name="config")
+app.add_typer(course_app, name="course")
+app.add_typer(quiz_app, name="quiz")
 
 console = Console()
 
@@ -93,8 +99,8 @@ def login(
         console.print(f"[red]Login failed: {e}[/red]")
         raise typer.Exit(code=1)
 
-@app.command()
-def ekursy():
+@course_app.command("list")
+def course_list():
     """List enrolled courses from eKursy."""
     console.print("Fetching courses from eKursy...")
     
@@ -124,8 +130,8 @@ def ekursy():
 
     console.print(table)
 
-@app.command()
-def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
+@course_app.command("show")
+def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
     """Show content of a specific course."""
     import re
 
@@ -275,8 +281,8 @@ def download(
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(code=1)
 
-@app.command()
-def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
+@quiz_app.command("info")
+def quiz_info(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
     """Show status and attempts for a specific quiz."""
     import re
     
@@ -303,7 +309,20 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
         raise typer.Exit(code=1)
 
     console.print(f"\n[bold white on blue] {info['title']} [/bold white on blue]")
-    console.print(f"[bold]{info['grading_method']}[/bold]\n")
+    
+    # Display intro/description if present
+    if info['intro']:
+        from markdownify import markdownify
+        from rich.markdown import Markdown
+        intro_md = markdownify(info['intro'])
+        console.print(Panel(Markdown(intro_md), title="Description", border_style="blue"))
+
+    # Display quiz info (Time limit, Grading method, etc.)
+    if info['info']:
+        info_text = "\n".join([f"• {p}" for p in info['info']])
+        console.print(Panel(info_text, title="Quiz Information", border_style="cyan"))
+    else:
+        console.print(f"[bold]Grading Method:[/bold] {info['grading_method']}\n")
 
     if not info['attempts']:
         console.print("[yellow]No attempts found for this quiz.[/yellow]")
@@ -328,10 +347,30 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
     if info['buttons']:
         console.print("\n[bold]Available Actions:[/bold]")
         for btn in info['buttons']:
-            console.print(f" - {btn['text']}: [blue]{btn['url']}[/blue]")
+            label = btn['text'].lower()
+            is_start = "start" in label or "kontynuuj" in label or "re-attempt" in label
+            style = "bold green" if is_start else "blue"
+            console.print(f" - [{style}]{btn['text']}[/{style}]: [blue]{btn['url']}[/blue]")
+        
+        # Suggest the 'start' command if a start button is present
+        if any("start" in b['text'].lower() for b in info['buttons']):
+             tip = (
+                 f"\n[yellow]Tip: Run [bold]put-esys quiz start {quiz_id}[/bold] "
+                 "to start a new attempt.[/yellow]"
+             )
+             console.print(tip)
+        elif any(
+            "kontynuuj" in b['text'].lower() or "continue" in b['text'].lower() 
+            for b in info['buttons']
+        ):
+             tip = (
+                 f"\n[yellow]Tip: Run [bold]put-esys quiz attempt {quiz_id}[/bold] "
+                 "to continue your attempt.[/yellow]"
+             )
+             console.print(tip)
 
-@app.command()
-def attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
+@quiz_app.command("attempt")
+def quiz_attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
     """View a particular quiz attempt (questions and answers)."""
     if attempt_id:
         msg = f"Fetching attempt [bold]{attempt_id}[/bold] for quiz [bold]{quiz_id}[/bold]..."
@@ -347,6 +386,11 @@ def attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
     info, error = get_quiz_attempt(quiz_id, attempt_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
+        console.print(
+            f"[yellow]Try running [bold]put-esys quiz start {quiz_id}[/bold] "
+            "to start a new attempt, "
+            f"or [bold]put-esys quiz info {quiz_id}[/bold] to see details.[/yellow]"
+        )
         raise typer.Exit(code=1)
 
     import re
@@ -379,8 +423,8 @@ def attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
         elif q['allows_attachments']:
              console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
 
-@app.command()
-def edit(
+@quiz_app.command("edit")
+def quiz_edit(
     quiz_id: int, 
     q_no: int, 
     text: str = typer.Option(None, "--text", "-t", help="New answer text"),
@@ -422,6 +466,26 @@ def edit(
         )
     else:
         console.print("[red]Failed to save answer.[/red]")
+
+@quiz_app.command("start")
+def quiz_start(quiz_id: int):
+    """Start a new quiz attempt."""
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+    
+    console.print(f"Starting new attempt for quiz [bold]{quiz_id}[/bold]...")
+    
+    with console.status("[bold green]Communicating with eKursy..."):
+        attempt_id, error = start_quiz_attempt(quiz_id, session)
+        
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(code=1)
+        
+    console.print(f"[bold green]Successfully started/found attempt {attempt_id}.[/bold green]")
+    console.print(f"Run [bold]put-esys quiz attempt {quiz_id} {attempt_id}[/bold] to view it.")
 
 if __name__ == "__main__":
     app()
