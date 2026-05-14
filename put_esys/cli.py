@@ -1,13 +1,17 @@
 import io
+import os
+import re
 import sys
 from typing import Optional
 
+import requests
 import typer
 from markdownify import markdownify
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
+from rich.tree import Tree
 
 from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
@@ -133,10 +137,6 @@ def course_list():
 @course_app.command("show")
 def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
     """Show content of a specific course."""
-    import re
-
-    from rich.tree import Tree
-    
     # Extract ID if URL is provided
     course_id = id_or_url
     if id_or_url.startswith("http"):
@@ -202,7 +202,6 @@ def save(
     if not session:
         msg = "[yellow]Warning: Not authenticated. Attempting to fetch without session.[/yellow]"
         console.print(msg)
-        import requests
         session = requests.Session()
         ua = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -237,9 +236,6 @@ def download(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename"),
 ):
     """Download a resource (file, document, etc.) from eKursy or other PUT systems."""
-    import os
-    import re
-    
     console.print(f"Downloading [blue]{url}[/blue]...")
     
     session = ensure_authenticated_session()
@@ -284,8 +280,6 @@ def download(
 @quiz_app.command("info")
 def quiz_info(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
     """Show status and attempts for a specific quiz."""
-    import re
-    
     # Extract ID if URL is provided
     quiz_id = id_or_url
     if id_or_url.startswith("http"):
@@ -392,8 +386,6 @@ def quiz_attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
             f"or [bold]put-esys quiz info {quiz_id}[/bold] to see details.[/yellow]"
         )
         raise typer.Exit(code=1)
-
-    import re
 
     for q in info['questions']:
         q_header = f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['type']}, {q['state']})"
