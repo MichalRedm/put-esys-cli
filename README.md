@@ -65,10 +65,36 @@ You can also manage your configuration:
 
 The CLI handles authentication automatically. Once configured, you can directly run resource commands:
 
-### eKursy
+### Courses
 List all your enrolled courses:
 ```bash
-put-esys ekursy
+put-esys course list
+```
+
+Show content of a specific course:
+```bash
+put-esys course show <course_id_or_url>
+```
+
+### Quizzes
+View quiz information and status:
+```bash
+put-esys quiz info <quiz_id_or_url>
+```
+
+Start a new quiz attempt:
+```bash
+put-esys quiz start <quiz_id>
+```
+
+View an attempt (questions and answers):
+```bash
+put-esys quiz attempt <quiz_id> [attempt_id]
+```
+
+Edit an answer in an in-progress attempt:
+```bash
+put-esys quiz edit <quiz_id> <question_number> --text "Your new answer"
 ```
 
 ### Manual Login (Optional)

@@ -275,7 +275,6 @@ def get_quiz_info(quiz_id, session=None):
         if review_link:
             href = review_link.get('href')
             attempt_data['review_url'] = href
-            import re
             match = re.search(r'attempt=(\d+)', href)
             if match:
                 attempt_data['id'] = match.group(1)
@@ -296,7 +295,6 @@ def get_quiz_info(quiz_id, session=None):
                         # without actually loading the whole page
                         r = session.post(action, data=data, allow_redirects=False)
                         loc = r.headers.get('Location', '')
-                        import re
                         match = re.search(r'attempt=(\d+)', loc)
                         if match:
                             attempt_data['id'] = match.group(1)
