@@ -303,11 +303,11 @@ def attempt(quiz_id: str, attempt_id: str):
         q_md_raw = markdownify(q['text'])
         a_md_raw = markdownify(q['answer'])
         
-        # Post-process to show URLs explicitly: [Text](URL) -> Text (URL)
+        # Post-process to show URLs explicitly: [Text](URL) -> [Text] (URL)
         # Using a regex that handles basic markdown links
         link_pattern = r'\[([^\]]+)\]\((https?://[^\)]+)\)'
-        q_md_text = re.sub(link_pattern, r'\1 (\2)', q_md_raw)
-        a_md_text = re.sub(link_pattern, r'\1 (\2)', a_md_raw)
+        q_md_text = re.sub(link_pattern, r'[\1] (\2)', q_md_raw)
+        a_md_text = re.sub(link_pattern, r'[\1] (\2)', a_md_raw)
 
         q_md = Markdown(q_md_text)
         a_md = Markdown(a_md_text)
