@@ -340,11 +340,35 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
                   opt_list.append(f"<li>{marker} {opt['text']}</li>")
              answer_html = f"<ul>{''.join(opt_list)}</ul>"
 
+        # Extract attachments
+        attachments = []
+        att_div = que_div.select_one('.attachments')
+        if att_div:
+             for att_link in att_div.select('a'):
+                  att_name = att_link.get_text(strip=True)
+                  att_url = att_link.get('href')
+                  if att_name and att_url and not att_url.startswith('#'):
+                       attachments.append({
+                            'name': att_name,
+                            'url': att_url
+                       })
+
+        # Identify question type
+        q_type = "unknown"
+        for cls in que_div.get('class', []):
+             is_qtype = cls.startswith('qtype_')
+             is_known = cls in ['essay', 'multichoice', 'truefalse', 'shortanswer']
+             if is_qtype or is_known:
+                  q_type = cls.replace('qtype_', '')
+                  break
+
         questions.append({
             'number': q_no,
             'state': q_state,
+            'type': q_type,
             'text': q_text_html,
-            'answer': answer_html
+            'answer': answer_html,
+            'attachments': attachments
         })
         
     return {

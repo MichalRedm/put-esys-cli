@@ -345,7 +345,8 @@ def attempt(quiz_id: str, attempt_id: str):
     import re
 
     for q in info['questions']:
-        console.print(f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['state']})")
+        q_header = f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['type']}, {q['state']})"
+        console.print(q_header)
         
         # Convert HTML to markdown
         q_md_raw = markdownify(q['text'])
@@ -362,6 +363,14 @@ def attempt(quiz_id: str, attempt_id: str):
         
         console.print(Panel(q_md, title="Question Text", border_style="blue"))
         console.print(Panel(a_md, title="Your Answer", border_style="green"))
+        
+        # Display attachments if any
+        if q['attachments']:
+             att_list = "\n".join([f" - [{a['name']}] ({a['url']})" for a in q['attachments']])
+             att_panel = Panel(Markdown(att_list), title="Submitted Files", border_style="yellow")
+             console.print(att_panel)
+        elif q['type'] == 'essay':
+             console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
 
 if __name__ == "__main__":
     app()
