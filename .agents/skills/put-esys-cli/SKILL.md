@@ -30,7 +30,8 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys attempt <QUIZ_ID> <ATTEMPT_ID>`: View questions and answers for a specific quiz attempt.
 
 ### General
-- `put-esys save <URL> [--output FILENAME]`: Download a page from a PUT system as an HTML file.
+- `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
+- `put-esys download <URL> [--output FILENAME]`: Download a binary resource (PDF, ZIP, etc.) and automatically detect the filename.
 
 ## Examples
 
@@ -57,6 +58,11 @@ put-esys attempt 2089015 1178826
 ### Saving a course page
 ```bash
 put-esys save "https://ekursy.put.poznan.pl/course/view.php?id=12345" -o my_course.html
+```
+
+### Downloading a resource
+```bash
+put-esys download "https://ekursy.put.poznan.pl/mod/resource/view.php?id=99999"
 ```
 
 ## Usage with Helper Scripts

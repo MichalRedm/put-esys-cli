@@ -174,10 +174,10 @@ def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL"))
 
 @app.command()
 def save(
-    url: str = typer.Argument(..., help="URL to save"),
+    url: str = typer.Argument(..., help="URL to save as HTML"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename"),
 ):
-    """Save a page from any PUT system as an HTML file."""
+    """Save a web page as an HTML file."""
     import re
     
     if not output:
@@ -200,24 +200,72 @@ def save(
         session.headers.update({"User-Agent": ua})
     
     try:
-        resp = session.get(url)
+        resp = session.get(url, stream=True)
+        resp.raise_for_status()
+        
+        content_type = resp.headers.get('Content-Type', '')
+        if 'text/html' not in content_type and 'application/xhtml+xml' not in content_type:
+            console.print(f"[yellow]Warning: Content-Type is {content_type}.[/yellow]")
+            console.print("[yellow]For binary files, use 'put-esys download' instead.[/yellow]")
+            
         # Check if we were redirected to a login page
         if "elogin.put.poznan.pl" in resp.url and "elogin.put.poznan.pl" not in url:
-             msg = (
-                 "[yellow]Detected redirection to eLogin. "
-                 "The current session might not be valid for this system.[/yellow]"
-             )
-             console.print(msg)
-             hint = (
-                 "[hint]Try running 'put-esys login' or "
-                 "ensuring your credentials are set correctly.[/hint]"
-             )
-             console.print(hint)
+             console.print("[yellow]Detected redirection to eLogin.[/yellow]")
         
         with open(output, "w", encoding="utf-8") as f:
             f.write(resp.text)
         
         console.print(f"[green]Successfully saved to [bold]{output}[/bold][/green]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+@app.command()
+def download(
+    url: str = typer.Argument(..., help="URL of the resource to download"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename"),
+):
+    """Download a resource (file, document, etc.) from eKursy or other PUT systems."""
+    import os
+    import re
+    
+    console.print(f"Downloading [blue]{url}[/blue]...")
+    
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+        
+    try:
+        resp = session.get(url, stream=True)
+        resp.raise_for_status()
+        
+        # Try to get filename from Content-Disposition
+        cd = resp.headers.get('Content-Disposition')
+        if not output and cd:
+            match = re.findall('filename=(.+)', cd)
+            if match:
+                output = match[0].strip(' "')
+        
+        # Fallback: get filename from URL
+        if not output:
+            output = os.path.basename(url.split('?')[0])
+            if not output or output == 'pluginfile.php':
+                 # If it's a generic Moodle file URL, try to find the filename in the path
+                 parts = url.split('/')
+                 if len(parts) > 1:
+                      output = parts[-1].split('?')[0]
+            
+            if not output:
+                 output = "downloaded_file"
+
+        with open(output, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+                
+        console.print(f"[green]Successfully downloaded [bold]{output}[/bold][/green]")
+        console.print(f"Size: [bold]{resp.headers.get('Content-Length', 'unknown')}[/bold] bytes")
+        
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(code=1)
