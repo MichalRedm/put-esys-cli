@@ -31,10 +31,16 @@ def get_ekursy_courses(session=None):
         if profile_link:
             user_id = re.search(r'id=(\d+)', profile_link['href']).group(1)
         else:
-            # Check if we are actually logged in
-            if "Michał Redmer" not in resp.text and "Kokpit" not in resp.text:
-                 return None, "Could not find user session in eKursy (Dashboard)."
-            return None, "Could not identify User ID from dashboard."
+            # Check if we are actually logged in (look for logout or profile links)
+            in_dashboard = "Kokpit" in resp.text or "Dashboard" in resp.text
+            if "login/logout.php" not in resp.text and not in_dashboard:
+                 msg = "Could not find user session in eKursy (Dashboard). Try logging in again."
+                 return None, msg
+            msg = (
+                "Could not identify User ID from dashboard. "
+                "The page structure might have changed."
+            )
+            return None, msg
     else:
         user_id = user_id_match.group(1)
     
@@ -52,46 +58,63 @@ def get_ekursy_courses(session=None):
     
     # In the profile tree, courses are listed under "Szczegóły kursów" or "Course profiles"
     # Find the header first
-    def is_course_profile(tag):
-        return (
-            tag.name in ['div', 'dt'] and
-            ('Profile w kursach' in tag.get_text() or 'Course profiles' in tag.get_text())
-        )
+    # Strategy A: Look for any course links (Profile or Dashboard)
+    # 1. Profile page style (user/view.php?id=USER_ID&course=COURSE_ID)
+    profile_links = soup.find_all('a', href=re.compile(r'user/view\.php\?.*course=(\d+)'))
+    for link in profile_links:
+        href = link['href']
+        cid_match = re.search(r'course=(\d+)', href)
+        if cid_match:
+            cid = cid_match.group(1)
+            title = link.get_text(strip=True)
+            existing_ids = [c['id'] for c in courses]
+            is_valid_title = title and title not in ["Zobacz więcej", "View", "Kurs"]
+            if is_valid_title and cid not in existing_ids:
+                courses.append({
+                    'id': cid,
+                    'title': title,
+                    'url': f"https://ekursy.put.poznan.pl/course/view.php?id={cid}"
+                })
 
-    course_header = soup.find(is_course_profile)
+    # 2. Direct course links (course/view.php?id=COURSE_ID)
+    direct_links = soup.find_all('a', href=re.compile(r'course/view\.php\?.*id=(\d+)'))
+    for link in direct_links:
+        href = link['href']
+        # For course/view.php, the 'id' parameter IS the course ID
+        cid_match = re.search(r'id=(\d+)', href)
+        if cid_match:
+            cid = cid_match.group(1)
+            title = link.get_text(strip=True)
+            existing_ids = [c['id'] for c in courses]
+            is_valid_title = title and title not in ["Zobacz więcej", "View", "Kurs"]
+            if is_valid_title and cid not in existing_ids:
+                courses.append({
+                    'id': cid,
+                    'title': title,
+                    'url': f"https://ekursy.put.poznan.pl/course/view.php?id={cid}"
+                })
     
-    if not course_header:
-        # Search all <li> elements for course links as fallback
-        links = soup.find_all('a', href=re.compile(r'course/view.php\?id=(\d+)|course=(\d+)'))
-        for link in links:
-             href = link['href']
-             course_id_match = re.search(r'id=(\d+)|course=(\d+)', href)
-             if course_id_match:
-                 cid = course_id_match.group(1) or course_id_match.group(2)
-                 title = link.get_text(strip=True)
-                 if title and title != "Zobacz więcej" and cid not in [c['id'] for c in courses]:
-                     courses.append({
-                         'id': cid,
-                         'title': title,
-                         'url': f"https://ekursy.put.poznan.pl/course/view.php?id={cid}"
-                     })
-    else:
-        # Found the header, look for the list in the next sibling or parent's sibling
-        dd = course_header.find_next('dd') or course_header.parent.find_next('dd')
-        if dd:
-            links = dd.find_all('a', href=True)
-            for link in links:
+    # Strategy C: Look in the navigation menu (Dashboard) if Strategy A/B didn't find much
+    if not courses:
+        try:
+            dashboard_resp = session.get("https://ekursy.put.poznan.pl/")
+            dashboard_soup = BeautifulSoup(dashboard_resp.text, 'html.parser')
+            # Look for any links to course/view.php
+            nav_links = dashboard_soup.find_all('a', href=re.compile(r'course/view.php\?id=(\d+)'))
+            for link in nav_links:
                 href = link['href']
-                course_id_match = re.search(r'[&?]course=(\d+)', href)
-                if course_id_match:
-                    course_id = course_id_match.group(1)
+                cid_match = re.search(r'id=(\d+)', href)
+                if cid_match:
+                    cid = cid_match.group(1)
                     title = link.get_text(strip=True)
-                    if title and title != "Zobacz więcej":
+                    if title and len(title) > 3 and cid not in [c['id'] for c in courses]:
                         courses.append({
-                            'id': course_id,
+                            'id': cid,
                             'title': title,
-                            'url': f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}"
+                            'url': f"https://ekursy.put.poznan.pl/course/view.php?id={cid}"
                         })
+        except Exception:
+            pass
     
     return courses, None
 
@@ -163,6 +186,19 @@ def get_course_content(course_id, session=None):
         'title': course_title,
         'sections': sections
     }, None
+
+def download_resource(url, session=None):
+    """Download a resource (file) from a URL."""
+    if not session:
+        from .auth import get_authenticated_session
+        session = get_authenticated_session()
+        
+    if not session:
+        raise Exception("Not authenticated.")
+        
+    response = session.get(url, stream=True)
+    response.raise_for_status()
+    return response
 def get_quiz_info(quiz_id, session=None):
     if not session:
         session = get_authenticated_session()
@@ -269,6 +305,22 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
     if not session:
         return None, "Not authenticated."
     
+    # If attempt_id is not provided, try to find the latest one
+    if attempt_id is None:
+        info, error = get_quiz_info(quiz_id, session)
+        if error:
+            return None, error
+        
+        # Priority 1: In progress attempt
+        in_progress = [a for a in info['attempts'] if a.get('status') == 'In progress']
+        if in_progress and in_progress[0].get('id'):
+            attempt_id = in_progress[0]['id']
+        # Priority 2: Latest finished attempt
+        elif info['attempts'] and info['attempts'][0].get('id'):
+            attempt_id = info['attempts'][0]['id']
+        else:
+            return None, "Could not find any quiz attempts. Start one in the browser first."
+    
     # Try review.php first (for finished attempts)
     url = f"https://ekursy.put.poznan.pl/mod/quiz/review.php?attempt={attempt_id}&cmid={quiz_id}"
     try:
@@ -340,10 +392,18 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
                   opt_list.append(f"<li>{marker} {opt['text']}</li>")
              answer_html = f"<ul>{''.join(opt_list)}</ul>"
 
-        # Extract attachments
+        # Extract attachments and check if they are allowed
         attachments = []
+        allows_attachments = False
         att_div = que_div.select_one('.attachments')
         if att_div:
+             # If att_div has children (like h4 label or ul), it means attachments are allowed
+             # In finished reviews, an empty allowed attachments area has an h4 and an empty ul.
+             # In in-progress attempts, it has a filemanager div.
+             # A div with NO allowed attachments is just <div class="attachments"></div> (empty)
+             if att_div.find(recursive=False) or att_div.get_text(strip=True):
+                  allows_attachments = True
+             
              for att_link in att_div.select('a'):
                   att_name = att_link.get_text(strip=True)
                   att_url = att_link.get('href')
@@ -366,6 +426,7 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
             'number': q_no,
             'state': q_state,
             'type': q_type,
+            'allows_attachments': allows_attachments,
             'text': q_text_html,
             'answer': answer_html,
             'attachments': attachments
@@ -376,3 +437,66 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
         'attempt_id': attempt_id,
         'questions': questions
     }, None
+
+def save_quiz_answer(session, quiz_id, attempt_id, question_number, new_text):
+    """Save an answer for a specific question in an in-progress attempt."""
+    from bs4 import BeautifulSoup
+    
+    # 1. Fetch the attempt page to get current values and hidden fields
+    url = f"https://ekursy.put.poznan.pl/mod/quiz/attempt.php?attempt={attempt_id}&cmid={quiz_id}"
+    r = session.get(url)
+    soup = BeautifulSoup(r.text, 'html.parser')
+    
+    # 2. Extract the form
+    form = soup.select_one('#responseform')
+    if not form:
+        raise Exception("Could not find the quiz form. Is the attempt in progress?")
+    
+    data = {}
+    
+    # 3. Extract hidden fields and all inputs/textareas to maintain state
+    # We want to replicate exactly what the browser would send
+    for inp in form.find_all(['input', 'textarea']):
+        name = inp.get('name')
+        if not name:
+            continue
+            
+        if inp.name == 'textarea':
+            data[name] = inp.get_text()
+        elif inp.get('type') == 'checkbox':
+            if inp.has_attr('checked'):
+                data[name] = inp.get('value', '1')
+        elif inp.get('type') == 'radio':
+            if inp.has_attr('checked'):
+                data[name] = inp.get('value')
+        else:
+            data[name] = inp.get('value', '')
+
+    # 4. Map question_number to its input name
+    target_name = None
+    for que_div in soup.select('.que'):
+        q_no_el = que_div.select_one('.qno')
+        if q_no_el and q_no_el.get_text(strip=True) == str(question_number):
+            textarea = que_div.select_one('textarea')
+            if textarea:
+                target_name = textarea.get('name')
+            break
+            
+    if not target_name:
+        raise Exception(f"Could not find input for question {question_number}")
+        
+    # 5. Update the target answer
+    data[target_name] = new_text
+    
+    # 6. Add 'next' to trigger save (Moodle saves on navigation)
+    data['next'] = '1'
+    
+    # 7. Post to processattempt.php
+    post_url = form.get('action')
+    if not post_url.startswith('http'):
+        from urllib.parse import urljoin
+        post_url = urljoin(url, post_url)
+        
+    r = session.post(post_url, data=data)
+    r.raise_for_status()
+    return True

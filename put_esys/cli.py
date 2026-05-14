@@ -11,7 +11,13 @@ from rich.table import Table
 
 from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
-from .scraper import get_ekursy_courses
+from .scraper import (
+    get_course_content,
+    get_ekursy_courses,
+    get_quiz_attempt,
+    get_quiz_info,
+    save_quiz_answer,
+)
 
 # Fix UnicodeEncodeError on Windows by forcing UTF-8 if necessary
 if sys.stdout.encoding != 'utf-8':
@@ -143,7 +149,6 @@ def course(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL"))
         console.print("Please run [bold]put-esys config set[/bold] first.")
         raise typer.Exit(code=1)
         
-    from .scraper import get_course_content
     content, error = get_course_content(course_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
@@ -292,7 +297,6 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
         
-    from .scraper import get_quiz_info
     info, error = get_quiz_info(quiz_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
@@ -327,16 +331,19 @@ def quiz(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
             console.print(f" - {btn['text']}: [blue]{btn['url']}[/blue]")
 
 @app.command()
-def attempt(quiz_id: str, attempt_id: str):
+def attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
     """View a particular quiz attempt (questions and answers)."""
-    console.print(f"Fetching attempt [bold]{attempt_id}[/bold] for quiz [bold]{quiz_id}[/bold]...")
+    if attempt_id:
+        msg = f"Fetching attempt [bold]{attempt_id}[/bold] for quiz [bold]{quiz_id}[/bold]..."
+        console.print(msg)
+    else:
+        console.print(f"Fetching current attempt for quiz [bold]{quiz_id}[/bold]...")
     
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
         
-    from .scraper import get_quiz_attempt
     info, error = get_quiz_attempt(quiz_id, attempt_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
@@ -369,8 +376,52 @@ def attempt(quiz_id: str, attempt_id: str):
              att_list = "\n".join([f" - [{a['name']}] ({a['url']})" for a in q['attachments']])
              att_panel = Panel(Markdown(att_list), title="Submitted Files", border_style="yellow")
              console.print(att_panel)
-        elif q['type'] == 'essay':
+        elif q['allows_attachments']:
              console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
+
+@app.command()
+def edit(
+    quiz_id: int, 
+    q_no: int, 
+    text: str = typer.Option(None, "--text", "-t", help="New answer text"),
+    file: str = typer.Option(None, "--file", "-f", help="Read answer text from file")
+):
+    """Edit an answer for a specific question in an in-progress attempt."""
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+    
+    if file:
+        with open(file, 'r', encoding='utf-8') as f:
+            text = f.read()
+            
+    if text is None:
+        console.print("[red]Error: You must provide either --text or --file.[/red]")
+        raise typer.Exit(1)
+        
+    # First, get the attempt ID
+    info, error = get_quiz_attempt(quiz_id, None, session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(1)
+        
+    attempt_id = info['attempt_id']
+    
+    with console.status(f"[bold green]Saving answer for Question {q_no}..."):
+        success = save_quiz_answer(session, quiz_id, attempt_id, q_no, text)
+        
+    if success:
+        console.print(
+            f"[bold green]Successfully saved answer for Question {q_no} "
+            f"in Attempt {attempt_id}.[/bold green]"
+        )
+        console.print(
+            "[yellow]Note: The quiz has NOT been submitted. "
+            "You can continue editing or finish in the browser.[/yellow]"
+        )
+    else:
+        console.print("[red]Failed to save answer.[/red]")
 
 if __name__ == "__main__":
     app()
