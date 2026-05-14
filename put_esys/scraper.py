@@ -215,11 +215,35 @@ def get_quiz_info(quiz_id, session=None):
 
     soup = BeautifulSoup(resp.text, 'html.parser')
     
+    # Extract sesskey
+    sesskey_match = re.search(r'"sesskey":"([^"]+)"', resp.text)
+    sesskey = sesskey_match.group(1) if sesskey_match else None
+    if not sesskey:
+        # Fallback: look for sesskey in logout link or hidden inputs
+        logout_link = soup.find('a', href=re.compile(r'sesskey=([^&]+)'))
+        if logout_link:
+            sesskey = re.search(r'sesskey=([^&]+)', logout_link['href']).group(1)
+
     title = soup.find('h1').get_text(strip=True) if soup.find('h1') else "Unknown Quiz"
     
-    grading_info = soup.select_one('.quizinfo p')
-    grading_method = grading_info.get_text(strip=True) if grading_info else "Unknown"
+    # Extract intro text
+    intro_div = soup.find(id='intro') or soup.select_one('.quizdescription')
+    intro = str(intro_div) if intro_div else ""
     
+    # Extract all info paragraphs (Time limit, Grading method, etc.)
+    info_paragraphs = [p.get_text(strip=True) for p in soup.select('.quizinfo p')]
+    
+    # Also check for availability info
+    avail_info = soup.select_one('.availabilityinfo')
+    if avail_info:
+        info_paragraphs.append(avail_info.get_text(strip=True))
+
+    grading_method = "Unknown"
+    for p in info_paragraphs:
+        if "Grading method" in p or "Metoda oceniania" in p:
+            grading_method = p.split(":")[-1].strip()
+            break
+        
     attempts = []
     # Attempts can be in a table or a list of cards
     attempt_cards = soup.select('.generaltable.quizreviewsummary')
@@ -293,10 +317,85 @@ def get_quiz_info(quiz_id, session=None):
 
     return {
         'title': title,
+        'intro': intro,
+        'info': info_paragraphs,
         'grading_method': grading_method,
         'attempts': attempts,
-        'buttons': buttons
+        'buttons': buttons,
+        'sesskey': sesskey
     }, None
+
+def start_quiz_attempt(quiz_id, session=None):
+    if not session:
+        session = get_authenticated_session()
+    
+    if not session:
+        return None, "Not authenticated."
+
+    # 1. Get the quiz page to find the sesskey and start button
+    url = f"https://ekursy.put.poznan.pl/mod/quiz/view.php?id={quiz_id}"
+    try:
+        resp = session.get(url)
+        resp.raise_for_status()
+    except Exception as e:
+        return None, f"Failed to access quiz page: {e}"
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    
+    # 2. Extract sesskey
+    sesskey_match = re.search(r'"sesskey":"([^"]+)"', resp.text)
+    sesskey = sesskey_match.group(1) if sesskey_match else None
+    if not sesskey:
+        logout_link = soup.find('a', href=re.compile(r'sesskey=([^&]+)'))
+        if logout_link:
+            sesskey = re.search(r'sesskey=([^&]+)', logout_link['href']).group(1)
+            
+    if not sesskey:
+        return None, "Could not find session key (sesskey). Page structure might have changed."
+
+    # 3. Check if there's an active "Continue" button instead of "Start"
+    # If so, we should just return the existing attempt ID
+    continue_form = soup.select_one('.quizstartbuttondiv form')
+    if continue_form:
+        btn = continue_form.find('button')
+        if btn and ("kontynuuj" in btn.get_text().lower() or "continue" in btn.get_text().lower()):
+            # Extract attempt ID from the form if possible, or just follow it
+            action = continue_form.get('action')
+            data = {
+                inp.get('name'): inp.get('value') 
+                for inp in continue_form.find_all('input')
+                if inp.get('name')
+            }
+            # Moodle often redirects to attempt.php?attempt=ID
+            r = session.post(action, data=data, allow_redirects=True)
+            match = re.search(r'attempt=(\d+)', r.url)
+            if match:
+                return match.group(1), None
+    
+    # 4. Start the attempt
+    # Typically it's a POST to view.php?id=QUIZ_ID with startattempt=1 and sesskey
+    data = {
+        'cmid': quiz_id,
+        'sesskey': sesskey,
+        'startattempt': '1'
+    }
+    
+    try:
+        # Moodle uses a redirect after starting
+        resp = session.post(url, data=data, allow_redirects=True)
+        resp.raise_for_status()
+        
+        # The URL should now be something like .../mod/quiz/attempt.php?attempt=12345
+        match = re.search(r'attempt=(\d+)', resp.url)
+        if match:
+            return match.group(1), None
+        else:
+            if "Password" in resp.text:
+                return None, "This quiz requires a password. Please start it in the browser."
+            return None, f"Started attempt but could not find attempt ID in URL: {resp.url}"
+            
+    except Exception as e:
+        return None, f"Failed to start attempt: {e}"
 
 def get_quiz_attempt(quiz_id, attempt_id, session=None):
     if not session:
