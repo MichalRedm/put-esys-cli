@@ -220,6 +220,29 @@ def get_quiz_info(quiz_id, session=None):
             if match:
                 attempt_data['id'] = match.group(1)
         
+        # If in progress and no ID found, try to find it in the "Continue" button
+        if attempt_data.get('status') == 'In progress' and not attempt_data.get('id'):
+            continue_form = soup.select_one('.quizstartbuttondiv form')
+            if continue_form:
+                # We might need to follow the redirect to get the attempt ID
+                action = continue_form.get('action')
+                if action:
+                    data = {
+                        inp.get('name'): inp.get('value') 
+                        for inp in continue_form.find_all('input')
+                    }
+                    try:
+                        # Use allow_redirects=False to see the Location header
+                        # without actually loading the whole page
+                        r = session.post(action, data=data, allow_redirects=False)
+                        loc = r.headers.get('Location', '')
+                        import re
+                        match = re.search(r'attempt=(\d+)', loc)
+                        if match:
+                            attempt_data['id'] = match.group(1)
+                    except Exception:
+                        pass
+
         attempts.append(attempt_data)
         
     # Check for buttons
@@ -246,10 +269,22 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
     if not session:
         return None, "Not authenticated."
     
+    # Try review.php first (for finished attempts)
     url = f"https://ekursy.put.poznan.pl/mod/quiz/review.php?attempt={attempt_id}&cmid={quiz_id}"
     try:
         resp = session.get(url)
         resp.raise_for_status()
+        
+        # If review.php redirects back to view.php, it might be in progress
+        # or we might need attempt.php
+        if 'mod/quiz/view.php' in resp.url:
+             url = (
+                 f"https://ekursy.put.poznan.pl/mod/quiz/attempt.php"
+                 f"?attempt={attempt_id}&cmid={quiz_id}"
+             )
+             resp = session.get(url)
+             resp.raise_for_status()
+             
     except Exception as e:
         return None, f"Failed to access attempt page: {e}"
 
@@ -268,8 +303,17 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
         
         # Extract answer
         # Essay
-        answer_div = que_div.select_one('.qtype_essay_response') or que_div.select_one('.answer')
-        answer = answer_div.get_text(strip=True) if answer_div else "No answer found"
+        answer_div = (
+            que_div.select_one('.qtype_essay_response') or 
+            que_div.select_one('.answer')
+        )
+        
+        # For in-progress attempts, it might be in a textarea
+        textarea = que_div.find('textarea')
+        if textarea:
+             answer = textarea.get_text(strip=True)
+        else:
+             answer = answer_div.get_text(strip=True) if answer_div else "No answer found"
         
         # Multiple choice / true-false
         # If it's a list of options
@@ -277,7 +321,10 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
         for option_div in que_div.select('.answer > div'):
              label = option_div.find('label')
              if label:
-                  is_selected = 'checked' in str(option_div) or 'selected' in str(option_div)
+                  is_selected = (
+                      'checked' in str(option_div) or 
+                      'selected' in str(option_div)
+                  )
                   options.append({
                        'text': label.get_text(strip=True),
                        'selected': is_selected
