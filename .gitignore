@@ -173,3 +173,4 @@ ekursy_auth.json
 *.json
 !pyproject.toml
 !README.md
+scratch/

@@ -15,13 +15,39 @@ Currently supports:
 
 ## Installation
 
+### For Users (Global Access)
+The recommended way to install `put-esys` globally is using [pipx](https://pypa.github.io/pipx/), which handles virtual environments automatically:
+
+```bash
+# Install directly from GitHub
+pipx install git+https://github.com/MichalRedm/put-esys-cli.git
+
+# Or if you have the repo cloned locally
+pipx install .
+```
+
+Alternatively, you can install via standard pip (not recommended for global use):
+```bash
+pip install .
+```
+
+### For Developers (Editable Mode)
 1. Clone the repository.
-2. Create a virtual environment and install dependencies:
-   ```bash
+2. Set up a virtual environment:
+   ```powershell
+   # Windows
    python -m venv .venv
-   source .venv/Scripts/activate  # Windows
+   .\.venv\Scripts\activate
    pip install -e .
    ```
+   ```bash
+   # Linux/macOS
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
+
+After installation, you can run the tool from anywhere using the `put-esys` command.
 
 ## Configuration
 
