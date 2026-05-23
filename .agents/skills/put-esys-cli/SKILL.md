@@ -24,10 +24,11 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys login`: Manually trigger authentication and refresh the session.
 
 ### eKursy
-- `put-esys ekursy`: List all enrolled courses with their IDs and URLs.
 - `put-esys course <ID_OR_URL>`: Display the content (sections and activities) of a specific course.
-- `put-esys quiz <ID_OR_URL>`: Show status and attempts for a specific quiz.
-- `put-esys attempt <QUIZ_ID> <ATTEMPT_ID>`: View questions and answers for a specific quiz attempt.
+- `put-esys quiz info <ID_OR_URL>`: Show status and attempts for a specific quiz.
+- `put-esys quiz attempt <QUIZ_ID> [ATTEMPT_ID]`: View questions and answers for a specific quiz attempt.
+- `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
+- `put-esys quiz edit <QUIZ_ID> <Q_NO> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH]`: Edit a quiz answer in an in-progress attempt by providing text, reading from a file, and/or attaching a file.
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
@@ -37,32 +38,37 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 
 ### Listing courses
 ```bash
-put-esys ekursy
+put-esys course list
 ```
 
 ### Viewing course content
 ```bash
-put-esys course 12345
+put-esys course show 12345
 ```
 
 ### Checking quiz status
 ```bash
-put-esys quiz 2129129
+put-esys quiz info 2129129
 ```
 
 ### Viewing a quiz attempt
 ```bash
-put-esys attempt 2089015 1178826
+put-esys quiz attempt 2089015 1178826
 ```
 
-### Saving a course page
+### Starting a quiz attempt
 ```bash
-put-esys save "https://ekursy.put.poznan.pl/course/view.php?id=12345" -o my_course.html
+put-esys quiz start 2129129
 ```
 
-### Downloading a resource
+### Editing a quiz answer (Markdown to HTML)
 ```bash
-put-esys download "https://ekursy.put.poznan.pl/mod/resource/view.php?id=99999"
+put-esys quiz edit 2129129 2 --file my_answer.md
+```
+
+### Attaching a file to a quiz answer
+```bash
+put-esys quiz edit 2129129 2 --attach my_document.pdf
 ```
 
 ## Usage with Helper Scripts

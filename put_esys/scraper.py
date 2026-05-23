@@ -510,6 +510,38 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
                             'url': att_url
                        })
 
+             # If in progress and no attachments found via simple links,
+             # try draftfiles_manager fallback
+             att_input = que_div.find('input', attrs={'name': re.compile(r'_attachments$')})
+             if att_input:
+                  allows_attachments = True
+                  itemid = att_input.get('value')
+                  ctx_match = re.search(r'"contextid":(\d+)', resp.text)
+                  ctx_id = ctx_match.group(1) if ctx_match else None
+                  sesskey_match = re.search(r'"sesskey":"([^"]+)"', resp.text)
+                  sesskey = sesskey_match.group(1) if sesskey_match else None
+                  
+                  if itemid and ctx_id and sesskey:
+                       draft_url = (
+                           f"https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
+                           f"?env=filemanager&action=browse&itemid={itemid}"
+                           f"&ctx_id={ctx_id}&sesskey={sesskey}"
+                       )
+                       try:
+                            draft_r = session.get(draft_url)
+                            draft_soup = BeautifulSoup(draft_r.text, 'html.parser')
+                            for link in draft_soup.select('a'):
+                                 href = link.get('href', '')
+                                 text = link.get_text(strip=True)
+                                 if '/draftfile.php/' in href and text and not link.get('class'):
+                                      if not any(a['name'] == text for a in attachments):
+                                           attachments.append({
+                                                'name': text,
+                                                'url': href
+                                           })
+                       except Exception:
+                            pass
+
         # Identify question type
         q_type = "unknown"
         for cls in que_div.get('class', []):
@@ -535,7 +567,9 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
         'questions': questions
     }, None
 
-def save_quiz_answer(session, quiz_id, attempt_id, question_number, new_text):
+def save_quiz_answer(
+    session, quiz_id, attempt_id, question_number, new_text=None, attachment_path=None
+):
     """Save an answer for a specific question in an in-progress attempt."""
     from bs4 import BeautifulSoup
     
@@ -569,60 +603,110 @@ def save_quiz_answer(session, quiz_id, attempt_id, question_number, new_text):
         else:
             data[name] = inp.get('value', '')
 
-    # 4. Map question_number to its input name
+    # 4. Map question_number to its input name and draft attachments field
     target_name = None
+    itemid = None
     for que_div in soup.select('.que'):
         q_no_el = que_div.select_one('.qno')
         if q_no_el and q_no_el.get_text(strip=True) == str(question_number):
             textarea = que_div.select_one('textarea')
             if textarea:
                 target_name = textarea.get('name')
+            
+            # Find attachments input
+            att_input = que_div.find('input', attrs={'name': re.compile(r'_attachments$')})
+            if att_input:
+                itemid = att_input.get('value')
             break
             
-    if not target_name:
-        raise Exception(f"Could not find input for question {question_number}")
-        
-    # Convert markdown to HTML if target expects HTML (format value '1')
-    format_name = f"{target_name}format"
-    if data.get(format_name) == "1":
-        from markdown_it import MarkdownIt
-        
-        # 1. Extract block math $$...$$
-        block_math = []
-        def replace_block(match):
-            block_math.append(match.group(1))
-            return f"<!--BLOCK_MATH_{len(block_math)-1}-->"
-            
-        temp_text = re.sub(r'\$\$(.*?)\$\$', replace_block, new_text, flags=re.DOTALL)
-        
-        # 2. Extract inline math $...$ (ignoring escaped dollar signs)
-        inline_math = []
-        def replace_inline(match):
-            inline_math.append(match.group(1))
-            return f"<!--INLINE_MATH_{len(inline_math)-1}-->"
-            
-        inline_regex = re.compile(r'(?<!\\)\$(?!\s)([^\$\n]+?)(?<!\s)(?<!\\)\$')
-        temp_text = inline_regex.sub(replace_inline, temp_text)
-        
-        # 3. Render Markdown to HTML
-        md = MarkdownIt('js-default', {'html': True})
-        new_text = md.render(temp_text)
-        
-        # 4. Restore block math with \[ ... \]
-        for i, math in enumerate(block_math):
-            new_text = new_text.replace(f"<!--BLOCK_MATH_{i}-->", f"\\[{math}\\]")
-            
-        # 5. Restore inline math with \( ... \)
-        for i, math in enumerate(inline_math):
-            new_text = new_text.replace(f"<!--INLINE_MATH_{i}-->", f"\\({math}\\)")
-        
-    # 5. Update the target answer
-    data[target_name] = new_text
+    # Extract context ID
+    ctx_match = re.search(r'"contextid":(\d+)', r.text)
+    ctx_id = ctx_match.group(1) if ctx_match else None
     
-    # 6. Add 'next' to trigger save (Moodle saves on navigation)
+    # 5. Handle file attachment upload if requested
+    if attachment_path:
+        import os
+        if not os.path.exists(attachment_path):
+            raise FileNotFoundError(f"Attachment file not found: {attachment_path}")
+            
+        if not itemid:
+            raise Exception(f"Question {question_number} does not support file attachments.")
+            
+        if not ctx_id:
+            raise Exception("Could not find context ID on the quiz page.")
+            
+        sesskey = data.get('sesskey')
+        if not sesskey:
+            raise Exception("Could not find session key (sesskey).")
+            
+        upload_url = "https://ekursy.put.poznan.pl/repository/repository_ajax.php?action=upload"
+        payload = {
+            'action': 'upload',
+            'repo_id': '4',  # Upload a file
+            'sesskey': sesskey,
+            'client_id': '6a11b8466c708',  # Hardcoded unique client ID
+            'itemid': itemid,
+            'ctx_id': ctx_id,
+            'savepath': '/',
+            'license': 'allrightsreserved',
+            'author': '',
+            'title': os.path.basename(attachment_path)
+        }
+        
+        with open(attachment_path, 'rb') as f:
+            files = {
+                'repo_upload_file': f
+            }
+            resp = session.post(upload_url, data=payload, files=files)
+            resp.raise_for_status()
+            if "error" in resp.text:
+                raise Exception(f"File upload failed: {resp.text}")
+
+    # 6. Update the target answer if new_text is provided
+    if new_text is not None:
+        if not target_name:
+            raise Exception(f"Could not find input for question {question_number}")
+            
+        # Convert markdown to HTML if target expects HTML (format value '1')
+        format_name = f"{target_name}format"
+        if data.get(format_name) == "1":
+            from markdown_it import MarkdownIt
+            
+            # 1. Extract block math $$...$$
+            block_math = []
+            def replace_block(match):
+                block_math.append(match.group(1))
+                return f"<!--BLOCK_MATH_{len(block_math)-1}-->"
+                
+            temp_text = re.sub(r'\$\$(.*?)\$\$', replace_block, new_text, flags=re.DOTALL)
+            
+            # 2. Extract inline math $...$ (ignoring escaped dollar signs)
+            inline_math = []
+            def replace_inline(match):
+                inline_math.append(match.group(1))
+                return f"<!--INLINE_MATH_{len(inline_math)-1}-->"
+                
+            inline_regex = re.compile(r'(?<!\\)\$(?!\s)([^\$\n]+?)(?<!\s)(?<!\\)\$')
+            temp_text = inline_regex.sub(replace_inline, temp_text)
+            
+            # 3. Render Markdown to HTML
+            md = MarkdownIt('js-default', {'html': True})
+            new_text = md.render(temp_text)
+            
+            # 4. Restore block math with \[ ... \]
+            for i, math in enumerate(block_math):
+                new_text = new_text.replace(f"<!--BLOCK_MATH_{i}-->", f"\\[{math}\\]")
+                
+            # 5. Restore inline math with \( ... \)
+            for i, math in enumerate(inline_math):
+                new_text = new_text.replace(f"<!--INLINE_MATH_{i}-->", f"\\({math}\\)")
+            
+        data[target_name] = new_text
+    
+    # 7. Add 'next' to trigger save (Moodle saves on navigation)
     data['next'] = '1'
     
-    # 7. Post to processattempt.php
+    # 8. Post to processattempt.php
     post_url = form.get('action')
     if not post_url.startswith('http'):
         from urllib.parse import urljoin

@@ -420,7 +420,10 @@ def quiz_edit(
     quiz_id: int, 
     q_no: int, 
     text: str = typer.Option(None, "--text", "-t", help="New answer text"),
-    file: str = typer.Option(None, "--file", "-f", help="Read answer text from file")
+    file: str = typer.Option(None, "--file", "-f", help="Read answer text from file"),
+    attach: Optional[str] = typer.Option(
+        None, "--attach", "-a", help="Path to file to attach to the question"
+    )
 ):
     """Edit an answer for a specific question in an in-progress attempt."""
     session = ensure_authenticated_session()
@@ -432,8 +435,8 @@ def quiz_edit(
         with open(file, 'r', encoding='utf-8') as f:
             text = f.read()
             
-    if text is None:
-        console.print("[red]Error: You must provide either --text or --file.[/red]")
+    if text is None and attach is None:
+        console.print("[red]Error: You must provide either --text/--file or --attach.[/red]")
         raise typer.Exit(1)
         
     # First, get the attempt ID
@@ -445,7 +448,7 @@ def quiz_edit(
     attempt_id = info['attempt_id']
     
     with console.status(f"[bold green]Saving answer for Question {q_no}..."):
-        success = save_quiz_answer(session, quiz_id, attempt_id, q_no, text)
+        success = save_quiz_answer(session, quiz_id, attempt_id, q_no, text, attach)
         
     if success:
         console.print(
