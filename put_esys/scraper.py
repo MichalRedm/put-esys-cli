@@ -589,6 +589,12 @@ def save_quiz_answer(session, quiz_id, attempt_id, question_number, new_text):
         md = MarkdownIt('js-default', {'html': True})
         new_text = md.render(new_text)
         
+        # Replace LaTeX math delimiters with eKursy/Moodle TeX filter delimiters
+        # Block math: $$ ... $$ -> \[ ... \]
+        new_text = re.sub(r'\$\$(.*?)\$\$', r'\\[\1\\]', new_text, flags=re.DOTALL)
+        # Inline math: $ ... $ -> \( ... \)
+        new_text = re.sub(r'(?<!\\)\$(?!\s)([^\$\n]+?)(?<!\s)(?<!\\)\$', r'\\(\1\\)', new_text)
+        
     # 5. Update the target answer
     data[target_name] = new_text
     
