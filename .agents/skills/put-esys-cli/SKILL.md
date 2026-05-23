@@ -28,7 +28,7 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz info <ID_OR_URL>`: Show status and attempts for a specific quiz.
 - `put-esys quiz attempt <QUIZ_ID> [ATTEMPT_ID]`: View questions and answers for a specific quiz attempt.
 - `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
-- `put-esys quiz edit <QUIZ_ID> <Q_NO> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH]`: Edit a quiz answer in an in-progress attempt by providing text, reading from a file, and/or attaching a file.
+- `put-esys quiz edit <QUIZ_ID> <Q_NO> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH] [--remove FILENAME]`: Edit a quiz answer in an in-progress attempt by providing text, reading from a file, attaching a file, and/or removing an existing attachment.
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
@@ -69,6 +69,11 @@ put-esys quiz edit 2129129 2 --file my_answer.md
 ### Attaching a file to a quiz answer
 ```bash
 put-esys quiz edit 2129129 2 --attach my_document.pdf
+```
+
+### Removing an attachment from a quiz answer
+```bash
+put-esys quiz edit 2129129 2 --remove redundant_file.png
 ```
 
 ## Usage with Helper Scripts

@@ -568,7 +568,13 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
     }, None
 
 def save_quiz_answer(
-    session, quiz_id, attempt_id, question_number, new_text=None, attachment_path=None
+    session,
+    quiz_id,
+    attempt_id,
+    question_number,
+    new_text=None,
+    attachment_path=None,
+    remove_attachment=None,
 ):
     """Save an answer for a specific question in an in-progress attempt."""
     from bs4 import BeautifulSoup
@@ -661,6 +667,37 @@ def save_quiz_answer(
             resp.raise_for_status()
             if "error" in resp.text:
                 raise Exception(f"File upload failed: {resp.text}")
+
+    # 6. Handle file attachment removal if requested
+    if remove_attachment:
+        if not itemid:
+            raise Exception(f"Question {question_number} does not support file attachments.")
+            
+        if not ctx_id:
+            raise Exception("Could not find context ID on the quiz page.")
+            
+        sesskey = data.get('sesskey')
+        if not sesskey:
+            raise Exception("Could not find session key (sesskey).")
+            
+        delete_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
+        params = {
+            'ctx_id': ctx_id,
+            'itemid': itemid,
+            'env': 'filemanager',
+            'course': '1',
+            'maxbytes': '0',
+            'areamaxbytes': '-1',
+            'maxfiles': '-1',
+            'subdirs': '0',
+            'sesskey': sesskey,
+            'action': 'deletedraft',
+            'draftpath': '/',
+            'filename': remove_attachment
+        }
+        
+        resp = session.get(delete_url, params=params)
+        resp.raise_for_status()
 
     # 6. Update the target answer if new_text is provided
     if new_text is not None:
