@@ -586,14 +586,35 @@ def save_quiz_answer(session, quiz_id, attempt_id, question_number, new_text):
     format_name = f"{target_name}format"
     if data.get(format_name) == "1":
         from markdown_it import MarkdownIt
-        md = MarkdownIt('js-default', {'html': True})
-        new_text = md.render(new_text)
         
-        # Replace LaTeX math delimiters with eKursy/Moodle TeX filter delimiters
-        # Block math: $$ ... $$ -> \[ ... \]
-        new_text = re.sub(r'\$\$(.*?)\$\$', r'\\[\1\\]', new_text, flags=re.DOTALL)
-        # Inline math: $ ... $ -> \( ... \)
-        new_text = re.sub(r'(?<!\\)\$(?!\s)([^\$\n]+?)(?<!\s)(?<!\\)\$', r'\\(\1\\)', new_text)
+        # 1. Extract block math $$...$$
+        block_math = []
+        def replace_block(match):
+            block_math.append(match.group(1))
+            return f"<!--BLOCK_MATH_{len(block_math)-1}-->"
+            
+        temp_text = re.sub(r'\$\$(.*?)\$\$', replace_block, new_text, flags=re.DOTALL)
+        
+        # 2. Extract inline math $...$ (ignoring escaped dollar signs)
+        inline_math = []
+        def replace_inline(match):
+            inline_math.append(match.group(1))
+            return f"<!--INLINE_MATH_{len(inline_math)-1}-->"
+            
+        inline_regex = re.compile(r'(?<!\\)\$(?!\s)([^\$\n]+?)(?<!\s)(?<!\\)\$')
+        temp_text = inline_regex.sub(replace_inline, temp_text)
+        
+        # 3. Render Markdown to HTML
+        md = MarkdownIt('js-default', {'html': True})
+        new_text = md.render(temp_text)
+        
+        # 4. Restore block math with \[ ... \]
+        for i, math in enumerate(block_math):
+            new_text = new_text.replace(f"<!--BLOCK_MATH_{i}-->", f"\\[{math}\\]")
+            
+        # 5. Restore inline math with \( ... \)
+        for i, math in enumerate(inline_math):
+            new_text = new_text.replace(f"<!--INLINE_MATH_{i}-->", f"\\({math}\\)")
         
     # 5. Update the target answer
     data[target_name] = new_text
