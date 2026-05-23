@@ -582,6 +582,13 @@ def save_quiz_answer(session, quiz_id, attempt_id, question_number, new_text):
     if not target_name:
         raise Exception(f"Could not find input for question {question_number}")
         
+    # Convert markdown to HTML if target expects HTML (format value '1')
+    format_name = f"{target_name}format"
+    if data.get(format_name) == "1":
+        from markdown_it import MarkdownIt
+        md = MarkdownIt('js-default', {'html': True})
+        new_text = md.render(new_text)
+        
     # 5. Update the target answer
     data[target_name] = new_text
     
