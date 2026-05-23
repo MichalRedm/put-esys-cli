@@ -28,7 +28,8 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz info <ID_OR_URL>`: Show status and attempts for a specific quiz.
 - `put-esys quiz attempt <QUIZ_ID> [ATTEMPT_ID]`: View questions and answers for a specific quiz attempt.
 - `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
-- `put-esys quiz edit <QUIZ_ID> <Q_NO> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH] [--remove FILENAME]`: Edit a quiz answer in an in-progress attempt by providing text, reading from a file, attaching a file, and/or removing an existing attachment.
+- `put-esys quiz edit <QUIZ_ID> <Q_NO> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH] [--remove FILENAME] [--rename OLD_NAME] [--new-name NEW_NAME]`: Edit a quiz answer in an in-progress attempt by providing text, reading from a file, attaching a file (optionally under a custom name via `--new-name`), removing a file, or renaming a file.
+- `put-esys quiz download <QUIZ_ID> <Q_NO> <FILENAME> [--output OUTPUT_PATH]`: Download an attached file from a specific quiz question.
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
@@ -71,9 +72,24 @@ put-esys quiz edit 2129129 2 --file my_answer.md
 put-esys quiz edit 2129129 2 --attach my_document.pdf
 ```
 
+### Attaching a file with a custom filename setting
+```bash
+put-esys quiz edit 2129129 2 --attach my_document.pdf --new-name custom_filename.pdf
+```
+
+### Renaming an uploaded attachment
+```bash
+put-esys quiz edit 2129129 2 --rename old_filename.png --new-name new_filename.png
+```
+
 ### Removing an attachment from a quiz answer
 ```bash
 put-esys quiz edit 2129129 2 --remove redundant_file.png
+```
+
+### Downloading an uploaded file from a quiz question
+```bash
+put-esys quiz download 2129129 2 my_document.pdf -o downloaded_document.pdf
 ```
 
 ## Usage with Helper Scripts

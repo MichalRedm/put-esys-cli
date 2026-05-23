@@ -426,6 +426,12 @@ def quiz_edit(
     ),
     remove: Optional[str] = typer.Option(
         None, "--remove", "-r", help="Name of attachment file to remove"
+    ),
+    rename: Optional[str] = typer.Option(
+        None, "--rename", help="Name of existing attachment to rename"
+    ),
+    new_name: Optional[str] = typer.Option(
+        None, "--new-name", help="New filename for the uploaded or renamed attachment"
     )
 ):
     """Edit an answer for a specific question in an in-progress attempt."""
@@ -438,9 +444,15 @@ def quiz_edit(
         with open(file, 'r', encoding='utf-8') as f:
             text = f.read()
             
-    if text is None and attach is None and remove is None:
+    if text is None and attach is None and remove is None and rename is None:
         console.print(
-            "[red]Error: You must provide either --text/--file, --attach, or --remove.[/red]"
+            "[red]Error: You must provide --text/--file, --attach, --remove, or --rename.[/red]"
+        )
+        raise typer.Exit(1)
+        
+    if rename is not None and new_name is None:
+        console.print(
+            "[red]Error: You must provide --new-name when renaming a file via --rename.[/red]"
         )
         raise typer.Exit(1)
         
@@ -454,7 +466,7 @@ def quiz_edit(
     
     with console.status(f"[bold green]Saving answer for Question {q_no}..."):
         success = save_quiz_answer(
-            session, quiz_id, attempt_id, q_no, text, attach, remove
+            session, quiz_id, attempt_id, q_no, text, attach, remove, new_name, rename
         )
         
     if success:
@@ -488,6 +500,70 @@ def quiz_start(quiz_id: int):
         
     console.print(f"[bold green]Successfully started/found attempt {attempt_id}.[/bold green]")
     console.print(f"Run [bold]put-esys quiz attempt {quiz_id} {attempt_id}[/bold] to view it.")
+
+@quiz_app.command("download")
+def quiz_download(
+    quiz_id: int,
+    q_no: int,
+    filename: str,
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output filename/path"
+    )
+):
+    """Download an attached file from a quiz question."""
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+        
+    # Get current attempt
+    info, error = get_quiz_attempt(quiz_id, None, session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(1)
+        
+    # Find target question and file
+    target_q = None
+    for q in info['questions']:
+        if q['number'] == str(q_no):
+            target_q = q
+            break
+            
+    if not target_q:
+        console.print(f"[red]Error: Question {q_no} not found in attempt.[/red]")
+        raise typer.Exit(1)
+        
+    target_att = None
+    for att in target_q['attachments']:
+        if att['name'] == filename:
+            target_att = att
+            break
+            
+    if not target_att:
+        msg = f"[red]Error: Attachment '{filename}' not found on Question {q_no}.[/red]"
+        console.print(msg)
+        if target_q['attachments']:
+            console.print("Available files:")
+            for att in target_q['attachments']:
+                console.print(f" - {att['name']}")
+        raise typer.Exit(1)
+        
+    if not output:
+        output = filename
+        
+    console.print(f"Downloading [blue]{filename}[/blue] from Question {q_no}...")
+    try:
+        resp = session.get(target_att['url'], stream=True)
+        resp.raise_for_status()
+        
+        with open(output, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+                
+        console.print(f"[green]Successfully downloaded to [bold]{output}[/bold][/green]")
+    except Exception as e:
+        console.print(f"[red]Error downloading file: {e}[/red]")
+        raise typer.Exit(1)
 
 if __name__ == "__main__":
     app()

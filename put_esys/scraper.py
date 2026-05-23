@@ -575,6 +575,8 @@ def save_quiz_answer(
     new_text=None,
     attachment_path=None,
     remove_attachment=None,
+    new_name=None,
+    rename_attachment=None,
 ):
     """Save an answer for a specific question in an in-progress attempt."""
     from bs4 import BeautifulSoup
@@ -645,6 +647,9 @@ def save_quiz_answer(
         if not sesskey:
             raise Exception("Could not find session key (sesskey).")
             
+        # Use new_name as custom filename if provided, otherwise fallback to basename of path
+        upload_filename = new_name if new_name else os.path.basename(attachment_path)
+        
         upload_url = "https://ekursy.put.poznan.pl/repository/repository_ajax.php?action=upload"
         payload = {
             'action': 'upload',
@@ -656,7 +661,7 @@ def save_quiz_answer(
             'savepath': '/',
             'license': 'allrightsreserved',
             'author': '',
-            'title': os.path.basename(attachment_path)
+            'title': upload_filename
         }
         
         with open(attachment_path, 'rb') as f:
@@ -698,6 +703,46 @@ def save_quiz_answer(
         
         resp = session.get(delete_url, params=params)
         resp.raise_for_status()
+
+    # 7. Handle file attachment renaming if requested
+    if rename_attachment:
+        if not new_name:
+            raise Exception("New name (--new-name) must be provided to rename an attachment.")
+            
+        if not itemid:
+            raise Exception(f"Question {question_number} does not support file attachments.")
+            
+        if not ctx_id:
+            raise Exception("Could not find context ID on the quiz page.")
+            
+        sesskey = data.get('sesskey')
+        if not sesskey:
+            raise Exception("Could not find session key (sesskey).")
+            
+        rename_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
+        params = {
+            'ctx_id': ctx_id,
+            'itemid': itemid,
+            'env': 'filemanager',
+            'course': '1',
+            'maxbytes': '0',
+            'areamaxbytes': '-1',
+            'maxfiles': '-1',
+            'subdirs': '0',
+            'sesskey': sesskey,
+            'action': 'rename',
+            'draftpath': '/'
+        }
+        post_data = {
+            'newfilename': new_name,
+            'filename': rename_attachment,
+            'draftpath': '/'
+        }
+        
+        resp = session.post(rename_url, params=params, data=post_data)
+        resp.raise_for_status()
+        if "errormessage" in resp.text or "errorcode" in resp.text:
+            raise Exception(f"File renaming failed: {resp.text}")
 
     # 6. Update the target answer if new_text is provided
     if new_text is not None:
