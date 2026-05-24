@@ -30,6 +30,7 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
 - `put-esys quiz edit <QUIZ_ID> <Q_NO> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH] [--remove FILENAME] [--rename OLD_NAME] [--new-name NEW_NAME]`: Edit a quiz answer in an in-progress attempt by providing text, reading from a file, attaching a file (optionally under a custom name via `--new-name`), removing a file, or renaming a file.
 - `put-esys quiz download <QUIZ_ID> <Q_NO> <FILENAME> [--output OUTPUT_PATH]`: Download an attached file from a specific quiz question.
+- `put-esys quiz submit <QUIZ_ID> [ATTEMPT_ID] [--force]`: Submit a quiz attempt to finalize it for grading. WARNING: This action is irreversible!
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
@@ -91,6 +92,12 @@ put-esys quiz edit 2129129 2 --remove redundant_file.png
 ```bash
 put-esys quiz download 2129129 2 my_document.pdf -o downloaded_document.pdf
 ```
+
+### Submitting a quiz attempt (WARNING: IRREVERSIBLE!)
+```bash
+put-esys quiz submit 2129129
+```
+
 
 ## Usage with Helper Scripts
 

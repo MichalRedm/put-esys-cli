@@ -797,3 +797,78 @@ def save_quiz_answer(
     r = session.post(post_url, data=data)
     r.raise_for_status()
     return True
+
+
+def submit_quiz_attempt(session, quiz_id, attempt_id):
+    """Submit a quiz attempt to finalize and grade it."""
+    from urllib.parse import urljoin
+
+    from bs4 import BeautifulSoup
+
+    # 1. Fetch the summary page
+    url = f"https://ekursy.put.poznan.pl/mod/quiz/summary.php?attempt={attempt_id}&cmid={quiz_id}"
+    resp = session.get(url)
+    resp.raise_for_status()
+    
+    # 2. Check if the attempt is already submitted
+    # If the summary page redirects or doesn't have the submit form, it might be finished
+    if (
+        "mod/quiz/review.php" in resp.url
+        or "zakończone" in resp.text.lower()
+        or "złożone" in resp.text.lower()
+        or "finished" in resp.text.lower()
+        or "submitted" in resp.text.lower()
+    ):
+        # Attempt is likely already finished
+        return True, "Attempt is already submitted or finished."
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    
+    # 3. Locate the form with id="frm-finishattempt"
+    form = soup.find('form', id='frm-finishattempt')
+    if not form:
+        # Fallback search by action containing processattempt.php
+        form = soup.find('form', action=re.compile(r'processattempt\.php'))
+        
+    if not form:
+        return False, "Could not find the quiz submission form on the summary page."
+        
+    # 4. Parse form action and inputs
+    post_url = form.get('action')
+    if not post_url.startswith('http'):
+        post_url = urljoin(url, post_url)
+        
+    data = {}
+    for inp in form.find_all(['input', 'button']):
+        name = inp.get('name')
+        if name:
+            data[name] = inp.get('value', '')
+            
+    # Explicitly ensure finishattempt=1
+    data['finishattempt'] = '1'
+    
+    # 5. POST to processattempt.php
+    post_resp = session.post(post_url, data=data)
+    post_resp.raise_for_status()
+    
+    # 6. Verify if it succeeded by hitting the quiz info or review page, or checking final URL
+    # After submission, Moodle redirects to review.php or view.php
+    if "review.php" in post_resp.url:
+        return True, None
+        
+    # Let's hit the quiz info page and verify its state is not In progress anymore
+    info, error = get_quiz_info(quiz_id, session)
+    if not error and info.get('attempts'):
+        for att in info['attempts']:
+            if att.get('id') == str(attempt_id):
+                if att.get('status') in ['Finished', 'Submitted', 'Zakończone', 'Odesłane']:
+                    return True, None
+                else:
+                    return False, f"Attempt status is still: {att.get('status')}"
+                    
+    # If redirect occurred and we reached review/view page, consider it successful
+    if "view.php" in post_resp.url or "review.php" in post_resp.url:
+        return True, None
+        
+    return False, "Could not confirm successful submission from the redirection URL."
+

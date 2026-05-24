@@ -22,6 +22,7 @@ from .scraper import (
     get_quiz_info,
     save_quiz_answer,
     start_quiz_attempt,
+    submit_quiz_attempt,
 )
 
 # Fix UnicodeEncodeError on Windows by forcing UTF-8 if necessary
@@ -565,5 +566,71 @@ def quiz_download(
         console.print(f"[red]Error downloading file: {e}[/red]")
         raise typer.Exit(1)
 
+
+@quiz_app.command("submit")
+def quiz_submit(
+    quiz_id: int,
+    attempt_id: Optional[int] = typer.Argument(
+        None, help="Specific attempt ID to submit. If omitted, the active attempt will be found."
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Submit without asking for confirmation."
+    ),
+):
+    """Submit a quiz attempt to finalize and grade it. WARNING: This action is irreversible!"""
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+
+    # 1. Resolve attempt_id if not provided
+    if not attempt_id:
+        with console.status("[bold green]Checking quiz attempts..."):
+            info, error = get_quiz_info(quiz_id, session)
+            
+        if error:
+            console.print(f"[red]Error: {error}[/red]")
+            raise typer.Exit(1)
+            
+        # Priority 1: In progress attempt
+        in_progress = [a for a in info['attempts'] if a.get('status') in ['In progress', 'W toku']]
+        if in_progress and in_progress[0].get('id'):
+            attempt_id = int(in_progress[0]['id'])
+        else:
+            console.print("[red]No active (in progress) attempt found for this quiz.[/red]")
+            raise typer.Exit(1)
+
+    # 2. Safety confirmation prompt unless forced
+    if not force:
+        msg = (
+            f"[bold red]WARNING:[/bold red] You are about to submit [bold]Quiz {quiz_id}[/bold] "
+            f"(Attempt [bold]{attempt_id}[/bold]).\n"
+            f"[bold yellow]THIS ACTION IS IRREVERSIBLE![/bold yellow] "
+            "Your answers will be submitted for grading."
+        )
+        console.print(Panel(msg, border_style="red", title="Confirm Quiz Submission"))
+        
+        confirm = typer.confirm("Are you absolutely sure you want to submit and finish?")
+        if not confirm:
+            console.print("[yellow]Submission cancelled.[/yellow]")
+            return
+
+    # 3. Submit attempt
+    with console.status(f"[bold green]Submitting Attempt {attempt_id} for Quiz {quiz_id}..."):
+        success, error = submit_quiz_attempt(session, quiz_id, attempt_id)
+        
+    if success:
+        console.print(
+            f"[bold green]Successfully submitted and finalized Quiz {quiz_id} "
+            f"(Attempt {attempt_id})![/bold green]"
+        )
+        if error:  # If already submitted
+            console.print(f"[yellow]{error}[/yellow]")
+    else:
+        console.print(f"[red]Failed to submit quiz: {error}[/red]")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
+
