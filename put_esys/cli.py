@@ -2,7 +2,7 @@ import io
 import os
 import re
 import sys
-from typing import Optional
+from typing import List, Optional
 
 import requests
 import typer
