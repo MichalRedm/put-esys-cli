@@ -33,9 +33,10 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz submit <QUIZ_ID> [ATTEMPT_ID] [--force]`: Submit a quiz attempt to finalize it for grading. WARNING: This action is irreversible!
 
 ### Mail
-- `put-esys mail list [--limit N]`: List recent emails from your INBOX.
-- `put-esys mail read <MAIL_ID>`: Display the body of a specific email.
-- `put-esys mail send`: Send an email (interactive prompts for recipient, subject, and body).
+- `put-esys mail list [--limit N] [--search QUERY]`: List recent emails from your INBOX, optionally filtered by a search query (e.g. subject or sender).
+- `put-esys mail read <MAIL_ID>`: Display the body and list of attachments of a specific email.
+- `put-esys mail download <MAIL_ID> <FILENAME> [--output OUTPUT_PATH]`: Download an attachment from a specific email.
+- `put-esys mail send [--attach FILE_PATH]`: Send an email (interactive prompts for recipient, subject, and body). Can attach files using multiple `--attach` flags.
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
@@ -103,6 +104,20 @@ put-esys quiz download 2129129 2 my_document.pdf -o downloaded_document.pdf
 put-esys quiz submit 2129129
 ```
 
+### Searching emails
+```bash
+put-esys mail list --search "Project Update"
+```
+
+### Downloading an email attachment
+```bash
+put-esys mail download 123 "report.pdf" --output downloads/report.pdf
+```
+
+### Sending an email with attachments
+```bash
+put-esys mail send --attach document.pdf --attach image.png
+```
 
 ## Usage with Helper Scripts
 
