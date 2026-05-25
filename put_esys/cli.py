@@ -637,7 +637,9 @@ def quiz_submit(
 @mail_app.command("list")
 def mail_list(
     limit: int = typer.Option(10, help="Number of emails to list"),
-    search: Optional[str] = typer.Option(None, "--search", "-s", help="Search query (e.g., sender or subject)")
+    search: Optional[str] = typer.Option(
+        None, "--search", "-s", help="Search query (e.g., sender or subject)"
+    )
 ):
     """List recent emails from your INBOX, optionally filtered by a search query."""
     creds = load_credentials()
@@ -706,14 +708,20 @@ def mail_read(mail_id: str):
         console.print("\n[bold]Attachments:[/bold]")
         for att in email_data["attachments"]:
             console.print(f" - {att}")
-        console.print(f"\n[yellow]Tip: Run [bold]put-esys mail download {mail_id} <filename>[/bold] to download an attachment.[/yellow]")
+        tip_msg = (
+            f"\n[yellow]Tip: Run [bold]put-esys mail download {mail_id} <filename>[/bold] "
+            "to download an attachment.[/yellow]"
+        )
+        console.print(tip_msg)
 
 
 @mail_app.command("download")
 def mail_download(
     mail_id: str = typer.Argument(..., help="ID of the email"),
     filename: str = typer.Argument(..., help="Name of the attachment to download"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output path for the downloaded attachment")
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output path for the downloaded attachment"
+    )
 ):
     """Download an attachment from a specific email."""
     creds = load_credentials()
@@ -736,7 +744,8 @@ def mail_download(
     if success:
         console.print(f"[green]Successfully downloaded attachment to [bold]{output}[/bold][/green]")
     else:
-        console.print(f"[red]Failed to download attachment '{filename}'. Does it exist in the email?[/red]")
+        msg = f"[red]Failed to download attachment '{filename}'. Does it exist in the email?[/red]"
+        console.print(msg)
 
 
 @mail_app.command("send")
@@ -744,7 +753,9 @@ def mail_send(
     to: str = typer.Option(..., prompt="To", help="Recipient email address"),
     subject: str = typer.Option(..., prompt="Subject", help="Email subject"),
     body: str = typer.Option(..., prompt="Body", help="Email body"),
-    attach: Optional[List[str]] = typer.Option(None, "--attach", "-a", help="Path to file(s) to attach to the email")
+    attach: Optional[List[str]] = typer.Option(
+        None, "--attach", "-a", help="Path to file(s) to attach to the email"
+    )
 ):
     """Send an email."""
     creds = load_credentials()

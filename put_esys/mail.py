@@ -24,7 +24,9 @@ class MailClient:
         mail.login(self.username, self.password)
         return mail
 
-    def list_emails(self, folder="INBOX", limit=10, search_query: Optional[str] = None) -> List[Dict]:
+    def list_emails(
+        self, folder="INBOX", limit=10, search_query: Optional[str] = None
+    ) -> List[Dict]:
         mail = self._connect_imap()
         try:
             mail.select(folder)
@@ -117,7 +119,10 @@ class MailClient:
                             content_type = part.get_content_type()
                             content_disposition = str(part.get("Content-Disposition"))
                             
-                            is_attach = "attachment" in content_disposition or "inline" in content_disposition and part.get_filename()
+                            is_attach = (
+                                "attachment" in content_disposition
+                                or ("inline" in content_disposition and part.get_filename())
+                            )
                             
                             if is_attach:
                                 filename = part.get_filename()
@@ -177,7 +182,10 @@ class MailClient:
 
                     for part in msg.walk():
                         content_disposition = str(part.get("Content-Disposition"))
-                        is_attach = "attachment" in content_disposition or "inline" in content_disposition and part.get_filename()
+                        is_attach = (
+                            "attachment" in content_disposition
+                            or ("inline" in content_disposition and part.get_filename())
+                        )
                         
                         if is_attach:
                             part_filename = part.get_filename()
