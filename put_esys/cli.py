@@ -15,6 +15,7 @@ from rich.tree import Tree
 
 from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
+from .mail import MailClient
 from .scraper import (
     get_course_content,
     get_ekursy_courses,
@@ -37,10 +38,12 @@ app = typer.Typer(help="PUT Electronic Systems CLI")
 config_app = typer.Typer(help="Manage your PUT credentials")
 course_app = typer.Typer(help="Manage courses and content")
 quiz_app = typer.Typer(help="Manage quizzes and attempts")
+mail_app = typer.Typer(help="Manage your PUT email")
 
 app.add_typer(config_app, name="config")
 app.add_typer(course_app, name="course")
 app.add_typer(quiz_app, name="quiz")
+app.add_typer(mail_app, name="mail")
 
 console = Console()
 
@@ -629,6 +632,91 @@ def quiz_submit(
     else:
         console.print(f"[red]Failed to submit quiz: {error}[/red]")
         raise typer.Exit(1)
+
+
+@mail_app.command("list")
+def mail_list(limit: int = typer.Option(10, help="Number of emails to list")):
+    """List recent emails from your INBOX."""
+    creds = load_credentials()
+    if not creds:
+        msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
+        console.print(msg)
+        return
+
+    client = MailClient(creds["username"], creds["password"])
+    with console.status("[bold green]Fetching emails..."):
+        try:
+            emails = client.list_emails(limit=limit)
+        except Exception as e:
+            console.print(f"[red]Failed to list emails: {e}[/red]")
+            return
+
+    if not emails:
+        console.print("[yellow]No emails found.[/yellow]")
+        return
+
+    table = Table(title="Recent Emails")
+    table.add_column("ID", style="cyan")
+    table.add_column("From", style="magenta")
+    table.add_column("Subject", style="green")
+    table.add_column("Date", style="blue")
+
+    for email in emails:
+        table.add_row(email["id"], email["from"], email["subject"], email["date"])
+
+    console.print(table)
+
+
+@mail_app.command("read")
+def mail_read(mail_id: str):
+    """Read a specific email by its ID."""
+    creds = load_credentials()
+    if not creds:
+        msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
+        console.print(msg)
+        return
+
+    client = MailClient(creds["username"], creds["password"])
+    with console.status(f"[bold green]Fetching email {mail_id}..."):
+        try:
+            email_data = client.get_email_details(mail_id)
+        except Exception as e:
+            console.print(f"[red]Failed to fetch email: {e}[/red]")
+            return
+
+    if not email_data:
+        console.print(f"[red]Email with ID {mail_id} not found.[/red]")
+        return
+
+    console.print(
+        Panel(
+            email_data["body"],
+            title=f"Subject: {email_data['subject']}",
+            subtitle=f"From: {email_data['from']} | Date: {email_data['date']}",
+        )
+    )
+
+
+@mail_app.command("send")
+def mail_send(
+    to: str = typer.Option(..., prompt="To", help="Recipient email address"),
+    subject: str = typer.Option(..., prompt="Subject", help="Email subject"),
+    body: str = typer.Option(..., prompt="Body", help="Email body"),
+):
+    """Send an email."""
+    creds = load_credentials()
+    if not creds:
+        msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
+        console.print(msg)
+        return
+
+    client = MailClient(creds["username"], creds["password"])
+    with console.status("[bold green]Sending email..."):
+        try:
+            client.send_email(to, subject, body)
+            console.print("[green]Email sent successfully.[/green]")
+        except Exception as e:
+            console.print(f"[red]Failed to send email: {e}[/red]")
 
 
 if __name__ == "__main__":

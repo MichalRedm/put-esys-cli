@@ -32,6 +32,11 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz download <QUIZ_ID> <Q_NO> <FILENAME> [--output OUTPUT_PATH]`: Download an attached file from a specific quiz question.
 - `put-esys quiz submit <QUIZ_ID> [ATTEMPT_ID] [--force]`: Submit a quiz attempt to finalize it for grading. WARNING: This action is irreversible!
 
+### Mail
+- `put-esys mail list [--limit N]`: List recent emails from your INBOX.
+- `put-esys mail read <MAIL_ID>`: Display the body of a specific email.
+- `put-esys mail send`: Send an email (interactive prompts for recipient, subject, and body).
+
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
 - `put-esys download <URL> [--output FILENAME]`: Download a binary resource (PDF, ZIP, etc.) and automatically detect the filename.
