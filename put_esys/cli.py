@@ -138,6 +138,18 @@ def course_list():
 
     console.print(table)
 
+def get_activity_icon(activity_type: str) -> str:
+    """Get a display icon/prefix for an activity type."""
+    icons = {
+        'folder': "[DIR]",
+        'resource': "[FILE]",
+        'assign': "[ASSIGN]",
+        'quiz': "[QUIZ]",
+        'forum': "[FORUM]",
+        'url': "[URL]",
+    }
+    return icons.get(activity_type, "[FILE]")
+
 @course_app.command("show")
 def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
     """Show content of a specific course."""
@@ -169,21 +181,21 @@ def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy U
     for section in content['sections']:
         section_tree = tree.add(f"[bold cyan]{section['name']}[/bold cyan]")
         for activity in section['activities']:
-            icon = "[FILE]"
-            if activity['type'] == 'folder':
-                icon = "[DIR]"
-            elif activity['type'] == 'assign':
-                icon = "[ASSIGN]"
-            elif activity['type'] == 'quiz':
-                icon = "[QUIZ]"
-            elif activity['type'] == 'forum':
-                icon = "[FORUM]"
-            elif activity['type'] == 'url':
-                icon = "[URL]"
+            icon = get_activity_icon(activity['type'])
+            label = f"{icon} [magenta]{activity['name']}[/magenta]"
+            if activity.get('url'):
+                label += f" ([blue]{activity['url']}[/blue])"
             
-            section_tree.add(
-                f"{icon} [magenta]{activity['name']}[/magenta] ([blue]{activity['url']}[/blue])"
-            )
+            activity_node = section_tree.add(label)
+            
+            # Add children if any
+            if activity.get('children'):
+                for child in activity['children']:
+                    child_icon = get_activity_icon(child.get('type', 'resource'))
+                    child_label = f"{child_icon} [magenta]{child['name']}[/magenta]"
+                    if child.get('url'):
+                        child_label += f" ([blue]{child['url']}[/blue])"
+                    activity_node.add(child_label)
             
     console.print(tree)
 

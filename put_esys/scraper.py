@@ -189,37 +189,42 @@ def get_course_content(course_id, session=None):
                  activity_item = activity_li.select_one('div.activity-item')
                  if activity_item and activity_item.has_attr('data-activityname'):
                      activity_base_name = activity_item['data-activityname']
-                     
+
+                     # Construct base link if we have module ID and type
+                     mod_id = activity_li.get('data-id')
+                     if mod_id and activity_type != "unknown":
+                         link = f"https://ekursy.put.poznan.pl/mod/{activity_type}/view.php?id={mod_id}"
+                     else:
+                         link = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}#module-{activity_li.get('id', '')}"
+
                      # Check if it contains multiple files (e.g. inline folder)
                      fp_links = activity_li.select('.fp-filename a')
                      if fp_links:
+                         children = []
                          for fp_link in fp_links:
-                             file_name = fp_link.get_text(strip=True)
-                             full_name = f"{activity_base_name}: {file_name}"
-                             activities.append({
-                                 'name': full_name,
+                             children.append({
+                                 'name': fp_link.get_text(strip=True),
                                  'url': fp_link['href'],
-                                 'type': activity_type
+                                 'type': 'resource' # Files in folders are usually resources
                              })
+
+                         activities.append({
+                             'name': activity_base_name,
+                             'url': link,
+                             'type': activity_type,
+                             'children': children
+                         })
                      else:
                          # Try to find a single link (e.g. stretched-link or any link)
                          link_tag = activity_item.select_one('a.stretched-link') or activity_item.select_one('a')
                          if link_tag:
                              link = link_tag['href']
-                         else:
-                             # Construct link if we have module ID and type
-                             mod_id = activity_li.get('data-id')
-                             if mod_id and activity_type != "unknown":
-                                 link = f"https://ekursy.put.poznan.pl/mod/{activity_type}/view.php?id={mod_id}"
-                             else:
-                                 link = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}#module-{activity_li.get('id', '')}"
-                         
+
                          activities.append({
                              'name': activity_base_name,
                              'url': link,
                              'type': activity_type
-                         })
-        
+                         })        
         if activities or (name_tag and section_name):
             sections.append({
                 'name': section_name,
