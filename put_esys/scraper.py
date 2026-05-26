@@ -195,7 +195,8 @@ def get_course_content(course_id, session=None):
                      if mod_id and activity_type != "unknown":
                          link = f"https://ekursy.put.poznan.pl/mod/{activity_type}/view.php?id={mod_id}"
                      else:
-                         link = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}#module-{activity_li.get('id', '')}"
+                         mod_anchor = f"#module-{activity_li.get('id', '')}"
+                         link = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}{mod_anchor}"
 
                      # Check if it contains multiple files (e.g. inline folder)
                      fp_links = activity_li.select('.fp-filename a')
@@ -216,7 +217,10 @@ def get_course_content(course_id, session=None):
                          })
                      else:
                          # Try to find a single link (e.g. stretched-link or any link)
-                         link_tag = activity_item.select_one('a.stretched-link') or activity_item.select_one('a')
+                         link_tag = (
+                             activity_item.select_one('a.stretched-link') or 
+                             activity_item.select_one('a')
+                         )
                          if link_tag:
                              link = link_tag['href']
 
