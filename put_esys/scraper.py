@@ -146,6 +146,11 @@ def get_course_content(course_id, session=None):
              name_tag = section_li.select_one('.section-title')
              
         if name_tag:
+            # Clean up section name: remove badges and hidden spans
+            for badge in name_tag.select('.sectionbadges'):
+                badge.decompose()
+            for span in name_tag.select('.accesshide'):
+                span.decompose()
             section_name = name_tag.get_text(strip=True)
         else:
             section_id = section_li.get('id', '?')
@@ -155,6 +160,17 @@ def get_course_content(course_id, session=None):
         for activity_li in section_li.select('li.activity'):
              # Activity name and link
              a_tag = activity_li.select_one('div.activityname a')
+             
+             name = None
+             link = None
+             activity_type = "unknown"
+             
+             # Try to identify type from classes (modtype_...)
+             for cls in activity_li.get('class', []):
+                 if cls.startswith('modtype_'):
+                     activity_type = cls.replace('modtype_', '')
+                     break
+             
              if a_tag:
                  # Clean up lambda2 specific hidden spans
                  for span in a_tag.find_all('span', class_='accesshide'):
@@ -162,14 +178,25 @@ def get_course_content(course_id, session=None):
                  
                  name = a_tag.get_text(strip=True)
                  link = a_tag['href']
-                 
-                 # Try to identify type from classes (modtype_...)
-                 activity_type = "unknown"
-                 for cls in activity_li.get('class', []):
-                     if cls.startswith('modtype_'):
-                         activity_type = cls.replace('modtype_', '')
-                         break
-                 
+             else:
+                 # Fallback for newer themes / inline activities (e.g. inline folders)
+                 activity_item = activity_li.select_one('div.activity-item')
+                 if activity_item and activity_item.has_attr('data-activityname'):
+                     name = activity_item['data-activityname']
+                     
+                     # Try to find a link (e.g. stretched-link or any link)
+                     link_tag = activity_item.select_one('a.stretched-link') or activity_item.select_one('a')
+                     if link_tag:
+                         link = link_tag['href']
+                     else:
+                         # Construct link if we have module ID and type
+                         mod_id = activity_li.get('data-id')
+                         if mod_id and activity_type != "unknown":
+                             link = f"https://ekursy.put.poznan.pl/mod/{activity_type}/view.php?id={mod_id}"
+                         else:
+                             link = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}#module-{activity_li.get('id', '')}"
+             
+             if name:
                  activities.append({
                      'name': name,
                      'url': link,
