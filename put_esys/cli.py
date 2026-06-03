@@ -263,6 +263,24 @@ def download(
         resp = session.get(url, stream=True)
         resp.raise_for_status()
         
+        # Check if it's an HTML landing page for a resource
+        content_type = resp.headers.get('Content-Type', '')
+        html_content = None
+        if 'text/html' in content_type:
+            from bs4 import BeautifulSoup
+            html_content = resp.text
+            soup = BeautifulSoup(html_content, 'html.parser')
+            plugin_links = [
+                a['href'] for a in soup.find_all('a')
+                if a.get('href') and 'pluginfile.php' in a['href']
+            ]
+            if plugin_links:
+                url = plugin_links[0]
+                console.print(f"Resolving resource landing page to direct URL: [blue]{url}[/blue]")
+                resp = session.get(url, stream=True)
+                resp.raise_for_status()
+                html_content = None  # Reset as we now have a direct file stream
+        
         # Try to get filename from Content-Disposition
         cd = resp.headers.get('Content-Disposition')
         if not output and cd:
@@ -282,9 +300,17 @@ def download(
             if not output:
                  output = "downloaded_file"
 
-        with open(output, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+        # Make sure output name is unquoted (in case it is url-encoded)
+        import urllib.parse
+        output = urllib.parse.unquote(output)
+
+        if html_content is not None:
+            with open(output, "w", encoding="utf-8") as f:
+                f.write(html_content)
+        else:
+            with open(output, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
                 
         console.print(f"[green]Successfully downloaded [bold]{output}[/bold][/green]")
         console.print(f"Size: [bold]{resp.headers.get('Content-Length', 'unknown')}[/bold] bytes")
