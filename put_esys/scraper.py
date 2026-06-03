@@ -424,16 +424,27 @@ def start_quiz_attempt(quiz_id, session=None):
                 return match.group(1), None
     
     # 4. Start the attempt
-    # Typically it's a POST to view.php?id=QUIZ_ID with startattempt=1 and sesskey
+    start_url = "https://ekursy.put.poznan.pl/mod/quiz/startattempt.php"
+    if continue_form and continue_form.get('action'):
+        action = continue_form.get('action')
+        if action.startswith('http'):
+            start_url = action
+        else:
+            from urllib.parse import urljoin
+            start_url = urljoin(url, action)
+
     data = {
         'cmid': quiz_id,
-        'sesskey': sesskey,
-        'startattempt': '1'
+        'sesskey': sesskey
     }
+    if continue_form:
+        for inp in continue_form.find_all('input'):
+            if inp.get('name') and inp.get('value'):
+                data[inp.get('name')] = inp.get('value')
     
     try:
         # Moodle uses a redirect after starting
-        resp = session.post(url, data=data, allow_redirects=True)
+        resp = session.post(start_url, data=data, allow_redirects=True)
         resp.raise_for_status()
         
         # The URL should now be something like .../mod/quiz/attempt.php?attempt=12345
