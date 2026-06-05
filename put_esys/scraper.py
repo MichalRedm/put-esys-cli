@@ -950,6 +950,19 @@ def get_assignment_info(assign_id, session=None):
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
+    # Follow non-JS comments link if present to get static comment list
+    nonjs_link = soup.select_one("a.showcommentsnonjs")
+    if nonjs_link and nonjs_link.get("href"):
+        try:
+            from urllib.parse import urljoin
+
+            nonjs_url = urljoin(url, nonjs_link["href"])
+            comment_resp = session.get(nonjs_url)
+            comment_resp.raise_for_status()
+            soup = BeautifulSoup(comment_resp.text, "html.parser")
+        except Exception:
+            pass
+
     title = soup.find("h1").get_text(strip=True) if soup.find("h1") else "Unknown Assignment"
 
     # Extract description
@@ -970,7 +983,30 @@ def get_assignment_info(assign_id, session=None):
             td = row.find("td")
             if th and td:
                 key = th.get_text(strip=True)
-                val = td.get_text(strip=True)
+
+                # Custom parser for comments container to avoid ugly templates
+                comments_container = td.select_one(".commentscontainer")
+                if comments_container:
+                    comments = []
+                    for li in comments_container.select(".comment-list li"):
+                        text_el = li.select_one(".text")
+                        user_el = li.select_one(".user")
+                        time_el = li.select_one(".time")
+
+                        if text_el:
+                            user = user_el.get_text(strip=True) if user_el else "Unknown"
+                            time_str = (
+                                time_el.get_text(strip=True).strip("- ") if time_el else "Unknown"
+                            )
+                            text = text_el.get_text(strip=True)
+                            comments.append(f"• {user} ({time_str}): {text}")
+                    if comments:
+                        val = "\n".join(comments)
+                    else:
+                        count_el = comments_container.select_one(".comment-link")
+                        val = count_el.get_text(strip=True) if count_el else "No comments"
+                else:
+                    val = td.get_text(strip=True)
 
                 # Check for attachments inside this td
                 files = []
