@@ -27,9 +27,9 @@ from .scraper import (
 )
 
 # Fix UnicodeEncodeError on Windows by forcing UTF-8 if necessary
-if sys.stdout.encoding != 'utf-8':
+if sys.stdout.encoding != "utf-8":
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, io.UnsupportedOperation):
         # Fallback for older python versions or specific environments
         pass
@@ -47,6 +47,7 @@ app.add_typer(mail_app, name="mail")
 
 console = Console()
 
+
 @config_app.command("set")
 def config_set():
     """Set your PUT credentials."""
@@ -54,6 +55,7 @@ def config_set():
     password = typer.prompt("PUT password", hide_input=True)
     save_credentials(username, password)
     console.print("[green]Credentials saved successfully.[/green]")
+
 
 @config_app.command("show")
 def config_show():
@@ -63,15 +65,16 @@ def config_show():
         msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
         console.print(msg)
         return
-    
+
     table = Table(title="PUT CLI Configuration")
     table.add_column("Key", style="cyan")
     table.add_column("Value", style="magenta")
-    
-    table.add_row("Username", creds['username'])
+
+    table.add_row("Username", creds["username"])
     table.add_row("Password", "*" * 8)
-    
+
     console.print(table)
+
 
 @config_app.command("delete")
 def config_delete():
@@ -79,6 +82,7 @@ def config_delete():
     if typer.confirm("Are you sure you want to delete your stored credentials?"):
         clear_credentials()
         console.print("[red]Credentials deleted.[/red]")
+
 
 @app.command()
 def login(
@@ -89,8 +93,8 @@ def login(
     if not username or not password:
         creds = load_credentials()
         if creds:
-            username = username or creds['username']
-            password = password or creds['password']
+            username = username or creds["username"]
+            password = password or creds["password"]
         else:
             msg = (
                 "[yellow]No credentials provided and none stored. "
@@ -107,18 +111,19 @@ def login(
         console.print(f"[red]Login failed: {e}[/red]")
         raise typer.Exit(code=1)
 
+
 @course_app.command("list")
 def course_list():
     """List enrolled courses from eKursy."""
     console.print("Fetching courses from eKursy...")
-    
+
     # Use lazy authentication
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         console.print("Please run [bold]put-esys config set[/bold] first to save your credentials.")
         raise typer.Exit(code=1)
-        
+
     courses, error = get_ekursy_courses(session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
@@ -134,21 +139,23 @@ def course_list():
     table.add_column("URL", style="blue")
 
     for i, course in enumerate(courses, 1):
-        table.add_row(str(i), course['title'], course['url'])
+        table.add_row(str(i), course["title"], course["url"])
 
     console.print(table)
+
 
 def get_activity_icon(activity_type: str) -> str:
     """Get a display icon/prefix for an activity type."""
     icons = {
-        'folder': "[DIR]",
-        'resource': "[FILE]",
-        'assign': "[ASSIGN]",
-        'quiz': "[QUIZ]",
-        'forum': "[FORUM]",
-        'url': "[URL]",
+        "folder": "[DIR]",
+        "resource": "[FILE]",
+        "assign": "[ASSIGN]",
+        "quiz": "[QUIZ]",
+        "forum": "[FORUM]",
+        "url": "[URL]",
     }
     return icons.get(activity_type, "[FILE]")
+
 
 @course_app.command("show")
 def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy URL")):
@@ -164,40 +171,62 @@ def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy U
             raise typer.Exit(code=1)
 
     console.print(f"Fetching content for course [bold]{course_id}[/bold]...")
-    
+
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         console.print("Please run [bold]put-esys config set[/bold] first.")
         raise typer.Exit(code=1)
-        
+
     content, error = get_course_content(course_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
         raise typer.Exit(code=1)
 
     tree = Tree(f"[bold white on blue] {content['title']} [/bold white on blue]")
-    
-    for section in content['sections']:
+
+    for section in content["sections"]:
         section_tree = tree.add(f"[bold cyan]{section['name']}[/bold cyan]")
-        for activity in section['activities']:
-            icon = get_activity_icon(activity['type'])
+        for activity in section["activities"]:
+            if activity.get("type") == "label":
+                raw_content = activity.get("content") or activity.get("name") or ""
+                label_md = markdownify(raw_content)
+                # Strip markdown images to avoid cluttering output
+                label_md = re.sub(r"!\[.*?\]\(.*?\)", "", label_md)
+                # Post-process markdown links to show URLs explicitly
+                label_md = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r"[\1] (\2)", label_md)
+                label_md = label_md.strip()
+                if label_md:
+                    section_tree.add(Markdown(label_md))
+                continue
+
+            icon = get_activity_icon(activity["type"])
             label = f"{icon} [magenta]{activity['name']}[/magenta]"
-            if activity.get('url'):
+            if activity.get("url"):
                 label += f" ([blue]{activity['url']}[/blue])"
-            
+
             activity_node = section_tree.add(label)
-            
+
+            # Check if this non-label activity has additional description content
+            if activity.get("content"):
+                desc_md = markdownify(activity["content"])
+                desc_md = re.sub(r"!\[.*?\]\(.*?\)", "", desc_md)
+                desc_md = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r"[\1] (\2)", desc_md)
+                desc_md = desc_md.strip()
+                if desc_md:
+                    activity_node.add(Markdown(desc_md))
+
             # Add children if any
-            if activity.get('children'):
-                for child in activity['children']:
-                    child_icon = get_activity_icon(child.get('type', 'resource'))
+            if activity.get("children"):
+                for child in activity["children"]:
+                    child_icon = get_activity_icon(child.get("type", "resource"))
                     child_label = f"{child_icon} [magenta]{child['name']}[/magenta]"
-                    if child.get('url'):
+                    if child.get("url"):
                         child_label += f" ([blue]{child['url']}[/blue])"
                     activity_node.add(child_label)
-            
+
     console.print(tree)
+
 
 @app.command()
 def save(
@@ -206,14 +235,14 @@ def save(
 ):
     """Save a web page as an HTML file."""
     import re
-    
+
     if not output:
         # Create a simple filename from the URL
-        slug = re.sub(r'[^a-zA-Z0-9]', '_', url.replace('https://', '').replace('http://', ''))
+        slug = re.sub(r"[^a-zA-Z0-9]", "_", url.replace("https://", "").replace("http://", ""))
         output = f"{slug[:50]}.html"
 
     console.print(f"Fetching [blue]{url}[/blue]...")
-    
+
     session = ensure_authenticated_session()
     if not session:
         msg = "[yellow]Warning: Not authenticated. Attempting to fetch without session.[/yellow]"
@@ -224,27 +253,28 @@ def save(
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         session.headers.update({"User-Agent": ua})
-    
+
     try:
         resp = session.get(url, stream=True)
         resp.raise_for_status()
-        
-        content_type = resp.headers.get('Content-Type', '')
-        if 'text/html' not in content_type and 'application/xhtml+xml' not in content_type:
+
+        content_type = resp.headers.get("Content-Type", "")
+        if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
             console.print(f"[yellow]Warning: Content-Type is {content_type}.[/yellow]")
             console.print("[yellow]For binary files, use 'put-esys download' instead.[/yellow]")
-            
+
         # Check if we were redirected to a login page
         if "elogin.put.poznan.pl" in resp.url and "elogin.put.poznan.pl" not in url:
-             console.print("[yellow]Detected redirection to eLogin.[/yellow]")
-        
+            console.print("[yellow]Detected redirection to eLogin.[/yellow]")
+
         with open(output, "w", encoding="utf-8") as f:
             f.write(resp.text)
-        
+
         console.print(f"[green]Successfully saved to [bold]{output}[/bold][/green]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(code=1)
+
 
 @app.command()
 def download(
@@ -253,26 +283,28 @@ def download(
 ):
     """Download a resource (file, document, etc.) from eKursy or other PUT systems."""
     console.print(f"Downloading [blue]{url}[/blue]...")
-    
+
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
-        
+
     try:
         resp = session.get(url, stream=True)
         resp.raise_for_status()
-        
+
         # Check if it's an HTML landing page for a resource
-        content_type = resp.headers.get('Content-Type', '')
+        content_type = resp.headers.get("Content-Type", "")
         html_content = None
-        if 'text/html' in content_type:
+        if "text/html" in content_type:
             from bs4 import BeautifulSoup
+
             html_content = resp.text
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, "html.parser")
             plugin_links = [
-                a['href'] for a in soup.find_all('a')
-                if a.get('href') and 'pluginfile.php' in a['href']
+                a["href"]
+                for a in soup.find_all("a")
+                if a.get("href") and "pluginfile.php" in a["href"]
             ]
             if plugin_links:
                 url = plugin_links[0]
@@ -280,28 +312,29 @@ def download(
                 resp = session.get(url, stream=True)
                 resp.raise_for_status()
                 html_content = None  # Reset as we now have a direct file stream
-        
+
         # Try to get filename from Content-Disposition
-        cd = resp.headers.get('Content-Disposition')
+        cd = resp.headers.get("Content-Disposition")
         if not output and cd:
-            match = re.findall('filename=(.+)', cd)
+            match = re.findall("filename=(.+)", cd)
             if match:
                 output = match[0].strip(' "')
-        
+
         # Fallback: get filename from URL
         if not output:
-            output = os.path.basename(url.split('?')[0])
-            if not output or output == 'pluginfile.php':
-                 # If it's a generic Moodle file URL, try to find the filename in the path
-                 parts = url.split('/')
-                 if len(parts) > 1:
-                      output = parts[-1].split('?')[0]
-            
+            output = os.path.basename(url.split("?")[0])
+            if not output or output == "pluginfile.php":
+                # If it's a generic Moodle file URL, try to find the filename in the path
+                parts = url.split("/")
+                if len(parts) > 1:
+                    output = parts[-1].split("?")[0]
+
             if not output:
-                 output = "downloaded_file"
+                output = "downloaded_file"
 
         # Make sure output name is unquoted (in case it is url-encoded)
         import urllib.parse
+
         output = urllib.parse.unquote(output)
 
         if html_content is not None:
@@ -311,13 +344,14 @@ def download(
             with open(output, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=8192):
                     f.write(chunk)
-                
+
         console.print(f"[green]Successfully downloaded [bold]{output}[/bold][/green]")
         console.print(f"Size: [bold]{resp.headers.get('Content-Length', 'unknown')}[/bold] bytes")
-        
+
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(code=1)
+
 
 @quiz_app.command("info")
 def quiz_info(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")):
@@ -333,34 +367,35 @@ def quiz_info(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")
             raise typer.Exit(code=1)
 
     console.print(f"Fetching info for quiz [bold]{quiz_id}[/bold]...")
-    
+
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
-        
+
     info, error = get_quiz_info(quiz_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
         raise typer.Exit(code=1)
 
     console.print(f"\n[bold white on blue] {info['title']} [/bold white on blue]")
-    
+
     # Display intro/description if present
-    if info['intro']:
+    if info["intro"]:
         from markdownify import markdownify
         from rich.markdown import Markdown
-        intro_md = markdownify(info['intro'])
+
+        intro_md = markdownify(info["intro"])
         console.print(Panel(Markdown(intro_md), title="Description", border_style="blue"))
 
     # Display quiz info (Time limit, Grading method, etc.)
-    if info['info']:
-        info_text = "\n".join([f"• {p}" for p in info['info']])
+    if info["info"]:
+        info_text = "\n".join([f"• {p}" for p in info["info"]])
         console.print(Panel(info_text, title="Quiz Information", border_style="cyan"))
     else:
         console.print(f"[bold]Grading Method:[/bold] {info['grading_method']}\n")
 
-    if not info['attempts']:
+    if not info["attempts"]:
         console.print("[yellow]No attempts found for this quiz.[/yellow]")
     else:
         table = Table(title="Your Attempts")
@@ -370,40 +405,41 @@ def quiz_info(id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL")
         table.add_column("Started", style="blue")
         table.add_column("Grade", style="green")
 
-        for att in info['attempts']:
+        for att in info["attempts"]:
             table.add_row(
-                att.get('number', '1'),
-                att.get('id', 'N/A'),
-                att.get('status', 'Unknown'),
-                att.get('started', 'Unknown'),
-                att.get('grade', 'N/A')
+                att.get("number", "1"),
+                att.get("id", "N/A"),
+                att.get("status", "Unknown"),
+                att.get("started", "Unknown"),
+                att.get("grade", "N/A"),
             )
         console.print(table)
 
-    if info['buttons']:
+    if info["buttons"]:
         console.print("\n[bold]Available Actions:[/bold]")
-        for btn in info['buttons']:
-            label = btn['text'].lower()
+        for btn in info["buttons"]:
+            label = btn["text"].lower()
             is_start = "start" in label or "kontynuuj" in label or "re-attempt" in label
             style = "bold green" if is_start else "blue"
             console.print(f" - [{style}]{btn['text']}[/{style}]: [blue]{btn['url']}[/blue]")
-        
+
         # Suggest the 'start' command if a start button is present
-        if any("start" in b['text'].lower() for b in info['buttons']):
-             tip = (
-                 f"\n[yellow]Tip: Run [bold]put-esys quiz start {quiz_id}[/bold] "
-                 "to start a new attempt.[/yellow]"
-             )
-             console.print(tip)
+        if any("start" in b["text"].lower() for b in info["buttons"]):
+            tip = (
+                f"\n[yellow]Tip: Run [bold]put-esys quiz start {quiz_id}[/bold] "
+                "to start a new attempt.[/yellow]"
+            )
+            console.print(tip)
         elif any(
-            "kontynuuj" in b['text'].lower() or "continue" in b['text'].lower() 
-            for b in info['buttons']
+            "kontynuuj" in b["text"].lower() or "continue" in b["text"].lower()
+            for b in info["buttons"]
         ):
-             tip = (
-                 f"\n[yellow]Tip: Run [bold]put-esys quiz attempt {quiz_id}[/bold] "
-                 "to continue your attempt.[/yellow]"
-             )
-             console.print(tip)
+            tip = (
+                f"\n[yellow]Tip: Run [bold]put-esys quiz attempt {quiz_id}[/bold] "
+                "to continue your attempt.[/yellow]"
+            )
+            console.print(tip)
+
 
 @quiz_app.command("attempt")
 def quiz_attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
@@ -413,12 +449,12 @@ def quiz_attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
         console.print(msg)
     else:
         console.print(f"Fetching current attempt for quiz [bold]{quiz_id}[/bold]...")
-    
+
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
-        
+
     info, error = get_quiz_attempt(quiz_id, attempt_id, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
@@ -429,38 +465,39 @@ def quiz_attempt(quiz_id: int, attempt_id: int = typer.Argument(None)):
         )
         raise typer.Exit(code=1)
 
-    for q in info['questions']:
+    for q in info["questions"]:
         q_header = f"\n[bold cyan]Question {q['number']}[/bold cyan] ({q['type']}, {q['state']})"
         console.print(q_header)
-        
+
         # Convert HTML to markdown
-        q_md_raw = markdownify(q['text'])
-        a_md_raw = markdownify(q['answer'])
-        
+        q_md_raw = markdownify(q["text"])
+        a_md_raw = markdownify(q["answer"])
+
         # Post-process to show URLs explicitly: [Text](URL) -> [Text] (URL)
         # Using a regex that handles basic markdown links
-        link_pattern = r'\[([^\]]+)\]\((https?://[^\)]+)\)'
-        q_md_text = re.sub(link_pattern, r'[\1] (\2)', q_md_raw)
-        a_md_text = re.sub(link_pattern, r'[\1] (\2)', a_md_raw)
+        link_pattern = r"\[([^\]]+)\]\((https?://[^\)]+)\)"
+        q_md_text = re.sub(link_pattern, r"[\1] (\2)", q_md_raw)
+        a_md_text = re.sub(link_pattern, r"[\1] (\2)", a_md_raw)
 
         q_md = Markdown(q_md_text)
         a_md = Markdown(a_md_text)
-        
+
         console.print(Panel(q_md, title="Question Text", border_style="blue"))
         console.print(Panel(a_md, title="Your Answer", border_style="green"))
-        
+
         # Display attachments if any
-        if q['attachments']:
-             att_list = "\n".join([f" - [{a['name']}] ({a['url']})" for a in q['attachments']])
-             att_panel = Panel(Markdown(att_list), title="Submitted Files", border_style="yellow")
-             console.print(att_panel)
-        elif q['allows_attachments']:
-             console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
+        if q["attachments"]:
+            att_list = "\n".join([f" - [{a['name']}] ({a['url']})" for a in q["attachments"]])
+            att_panel = Panel(Markdown(att_list), title="Submitted Files", border_style="yellow")
+            console.print(att_panel)
+        elif q["allows_attachments"]:
+            console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
+
 
 @quiz_app.command("edit")
 def quiz_edit(
-    quiz_id: int, 
-    q_no: int, 
+    quiz_id: int,
+    q_no: int,
     text: str = typer.Option(None, "--text", "-t", help="New answer text"),
     file: str = typer.Option(None, "--file", "-f", help="Read answer text from file"),
     attach: Optional[str] = typer.Option(
@@ -474,43 +511,43 @@ def quiz_edit(
     ),
     new_name: Optional[str] = typer.Option(
         None, "--new-name", help="New filename for the uploaded or renamed attachment"
-    )
+    ),
 ):
     """Edit an answer for a specific question in an in-progress attempt."""
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
-    
+
     if file:
-        with open(file, 'r', encoding='utf-8') as f:
+        with open(file, "r", encoding="utf-8") as f:
             text = f.read()
-            
+
     if text is None and attach is None and remove is None and rename is None:
         console.print(
             "[red]Error: You must provide --text/--file, --attach, --remove, or --rename.[/red]"
         )
         raise typer.Exit(1)
-        
+
     if rename is not None and new_name is None:
         console.print(
             "[red]Error: You must provide --new-name when renaming a file via --rename.[/red]"
         )
         raise typer.Exit(1)
-        
+
     # First, get the attempt ID
     info, error = get_quiz_attempt(quiz_id, None, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
         raise typer.Exit(1)
-        
-    attempt_id = info['attempt_id']
-    
+
+    attempt_id = info["attempt_id"]
+
     with console.status(f"[bold green]Saving answer for Question {q_no}..."):
         success = save_quiz_answer(
             session, quiz_id, attempt_id, q_no, text, attach, remove, new_name, rename
         )
-        
+
     if success:
         console.print(
             f"[bold green]Successfully saved answer for Question {q_no} "
@@ -523,6 +560,7 @@ def quiz_edit(
     else:
         console.print("[red]Failed to save answer.[/red]")
 
+
 @quiz_app.command("start")
 def quiz_start(quiz_id: int):
     """Start a new quiz attempt."""
@@ -530,78 +568,77 @@ def quiz_start(quiz_id: int):
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
-    
+
     console.print(f"Starting new attempt for quiz [bold]{quiz_id}[/bold]...")
-    
+
     with console.status("[bold green]Communicating with eKursy..."):
         attempt_id, error = start_quiz_attempt(quiz_id, session)
-        
+
     if error:
         console.print(f"[red]Error: {error}[/red]")
         raise typer.Exit(code=1)
-        
+
     console.print(f"[bold green]Successfully started/found attempt {attempt_id}.[/bold green]")
     console.print(f"Run [bold]put-esys quiz attempt {quiz_id} {attempt_id}[/bold] to view it.")
+
 
 @quiz_app.command("download")
 def quiz_download(
     quiz_id: int,
     q_no: int,
     filename: str,
-    output: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Output filename/path"
-    )
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename/path"),
 ):
     """Download an attached file from a quiz question."""
     session = ensure_authenticated_session()
     if not session:
         console.print("[red]Not authenticated.[/red]")
         raise typer.Exit(code=1)
-        
+
     # Get current attempt
     info, error = get_quiz_attempt(quiz_id, None, session)
     if error:
         console.print(f"[red]Error: {error}[/red]")
         raise typer.Exit(1)
-        
+
     # Find target question and file
     target_q = None
-    for q in info['questions']:
-        if q['number'] == str(q_no):
+    for q in info["questions"]:
+        if q["number"] == str(q_no):
             target_q = q
             break
-            
+
     if not target_q:
         console.print(f"[red]Error: Question {q_no} not found in attempt.[/red]")
         raise typer.Exit(1)
-        
+
     target_att = None
-    for att in target_q['attachments']:
-        if att['name'] == filename:
+    for att in target_q["attachments"]:
+        if att["name"] == filename:
             target_att = att
             break
-            
+
     if not target_att:
         msg = f"[red]Error: Attachment '{filename}' not found on Question {q_no}.[/red]"
         console.print(msg)
-        if target_q['attachments']:
+        if target_q["attachments"]:
             console.print("Available files:")
-            for att in target_q['attachments']:
+            for att in target_q["attachments"]:
                 console.print(f" - {att['name']}")
         raise typer.Exit(1)
-        
+
     if not output:
         output = filename
-        
+
     console.print(f"Downloading [blue]{filename}[/blue] from Question {q_no}...")
     try:
-        resp = session.get(target_att['url'], stream=True)
+        resp = session.get(target_att["url"], stream=True)
         resp.raise_for_status()
-        
-        with open(output, 'wb') as f:
+
+        with open(output, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
-                
+
         console.print(f"[green]Successfully downloaded to [bold]{output}[/bold][/green]")
     except Exception as e:
         console.print(f"[red]Error downloading file: {e}[/red]")
@@ -628,15 +665,15 @@ def quiz_submit(
     if not attempt_id:
         with console.status("[bold green]Checking quiz attempts..."):
             info, error = get_quiz_info(quiz_id, session)
-            
+
         if error:
             console.print(f"[red]Error: {error}[/red]")
             raise typer.Exit(1)
-            
+
         # Priority 1: In progress attempt
-        in_progress = [a for a in info['attempts'] if a.get('status') in ['In progress', 'W toku']]
-        if in_progress and in_progress[0].get('id'):
-            attempt_id = int(in_progress[0]['id'])
+        in_progress = [a for a in info["attempts"] if a.get("status") in ["In progress", "W toku"]]
+        if in_progress and in_progress[0].get("id"):
+            attempt_id = int(in_progress[0]["id"])
         else:
             console.print("[red]No active (in progress) attempt found for this quiz.[/red]")
             raise typer.Exit(1)
@@ -650,7 +687,7 @@ def quiz_submit(
             "Your answers will be submitted for grading."
         )
         console.print(Panel(msg, border_style="red", title="Confirm Quiz Submission"))
-        
+
         confirm = typer.confirm("Are you absolutely sure you want to submit and finish?")
         if not confirm:
             console.print("[yellow]Submission cancelled.[/yellow]")
@@ -659,7 +696,7 @@ def quiz_submit(
     # 3. Submit attempt
     with console.status(f"[bold green]Submitting Attempt {attempt_id} for Quiz {quiz_id}..."):
         success, error = submit_quiz_attempt(session, quiz_id, attempt_id)
-        
+
     if success:
         console.print(
             f"[bold green]Successfully submitted and finalized Quiz {quiz_id} "
@@ -677,7 +714,7 @@ def mail_list(
     limit: int = typer.Option(10, help="Number of emails to list"),
     search: Optional[str] = typer.Option(
         None, "--search", "-s", help="Search query (e.g., sender or subject)"
-    )
+    ),
 ):
     """List recent emails from your INBOX, optionally filtered by a search query."""
     creds = load_credentials()
@@ -741,7 +778,7 @@ def mail_read(mail_id: str):
             subtitle=f"From: {email_data['from']} | Date: {email_data['date']}",
         )
     )
-    
+
     if email_data.get("attachments"):
         console.print("\n[bold]Attachments:[/bold]")
         for att in email_data["attachments"]:
@@ -759,7 +796,7 @@ def mail_download(
     filename: str = typer.Argument(..., help="Name of the attachment to download"),
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output path for the downloaded attachment"
-    )
+    ),
 ):
     """Download an attachment from a specific email."""
     creds = load_credentials()
@@ -793,7 +830,7 @@ def mail_send(
     body: str = typer.Option(..., prompt="Body", help="Email body"),
     attach: Optional[List[str]] = typer.Option(
         None, "--attach", "-a", help="Path to file(s) to attach to the email"
-    )
+    ),
 ):
     """Send an email."""
     creds = load_credentials()
@@ -813,4 +850,3 @@ def mail_send(
 
 if __name__ == "__main__":
     app()
-
