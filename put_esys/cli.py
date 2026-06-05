@@ -17,6 +17,7 @@ from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
 from .mail import MailClient
 from .scraper import (
+    delete_assignment_submission,
     get_assignment_info,
     get_course_content,
     get_ekursy_courses,
@@ -318,11 +319,115 @@ def assignment_upload(
     console.print(f"Uploading [bold]{file_path}[/bold] to assignment [bold]{assign_id}[/bold]...")
     with console.status("[bold green]Saving assignment submission..."):
         try:
-            save_assignment_submission(session, assign_id, file_path, name)
+            save_assignment_submission(session, assign_id, file_path=file_path, new_name=name)
             console.print("[bold green]Successfully saved assignment submission.[/bold green]")
         except Exception as e:
             console.print(f"[red]Failed to upload file: {e}[/red]")
             raise typer.Exit(code=1)
+
+
+@assignment_app.command("edit")
+def assignment_edit(
+    id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
+    text: Optional[str] = typer.Option(None, "--text", "-t", help="New online text content"),
+    file: Optional[str] = typer.Option(None, "--file", "-f", help="Read online text from file"),
+    attach: Optional[str] = typer.Option(None, "--attach", "-a", help="Path to file to attach"),
+    remove: Optional[str] = typer.Option(None, "--remove", "-r", help="Attachment to remove"),
+    rename: Optional[str] = typer.Option(None, "--rename", help="Name of attachment to rename"),
+    new_name: Optional[str] = typer.Option(
+        None, "--new-name", help="New filename for uploaded/renamed file"
+    ),
+):
+    """Edit an assignment submission (modify online text or files)."""
+    assign_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            assign_id = match.group(1)
+        else:
+            console.print("[red]Could not parse assignment ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+
+    if text is None and file is None and attach is None and remove is None and rename is None:
+        console.print("[red]Error: You must provide at least one option to edit.[/red]")
+        raise typer.Exit(1)
+
+    if rename is not None and new_name is None:
+        console.print("[red]Error: You must provide --new-name when renaming a file.[/red]")
+        raise typer.Exit(1)
+
+    with console.status(f"[bold green]Editing submission for Assignment {assign_id}..."):
+        try:
+            save_assignment_submission(
+                session,
+                assign_id,
+                file_path=attach,
+                new_name=new_name,
+                new_text=text,
+                text_file=file,
+                remove_attachment=remove,
+                rename_attachment=rename,
+            )
+            console.print(
+                f"[bold green]Successfully saved changes to Assignment {assign_id} "
+                f"submission.[/bold green]"
+            )
+        except Exception as e:
+            console.print(f"[red]Failed to edit assignment: {e}[/red]")
+            raise typer.Exit(code=1)
+
+
+@assignment_app.command("delete")
+def assignment_delete(
+    id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Delete without asking for confirmation."
+    ),
+):
+    """Delete/remove the assignment submission."""
+    assign_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            assign_id = match.group(1)
+        else:
+            console.print("[red]Could not parse assignment ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+
+    if not force:
+        msg = (
+            f"[bold red]WARNING:[/bold red] You are about to DELETE/REMOVE the submission "
+            f"for [bold]Assignment {assign_id}[/bold].\n"
+            f"[bold yellow]THIS ACTION WILL RESET YOUR SUBMISSION "
+            f"AND REMOVE ALL FILES/TEXT![/bold yellow]"
+        )
+        console.print(Panel(msg, border_style="red", title="Confirm Submission Deletion"))
+
+        confirm = typer.confirm("Are you absolutely sure you want to delete your submission?")
+        if not confirm:
+            console.print("[yellow]Deletion cancelled.[/yellow]")
+            return
+
+    with console.status(f"[bold green]Deleting submission for Assignment {assign_id}..."):
+        try:
+            delete_assignment_submission(session, assign_id)
+            console.print(
+                f"[bold green]Successfully deleted/removed Assignment {assign_id} "
+                f"submission.[/bold green]"
+            )
+        except Exception as e:
+            console.print(f"[red]Failed to delete assignment submission: {e}[/red]")
+            raise typer.Exit(1)
 
 
 @assignment_app.command("submit")

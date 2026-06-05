@@ -28,6 +28,8 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys assignment show <ID_OR_URL>`: Show content and status of a specific assignment.
 - `put-esys assignment upload <ID_OR_URL> <FILE_PATH> [--name NEW_NAME]`: Upload a file to an assignment (optionally under a custom name via `--name`) and save the submission changes.
 - `put-esys assignment submit <ID_OR_URL> [--force]`: Finalize and submit the assignment submission. WARNING: This action is irreversible!
+- `put-esys assignment edit <ID_OR_URL> [--text TEXT] [--file FILE_PATH] [--attach ATTACH_PATH] [--remove FILENAME] [--rename OLD_NAME] [--new-name NEW_NAME]`: Edit an assignment submission (modify online text, attach new files, remove or rename files).
+- `put-esys assignment delete <ID_OR_URL> [--force]`: Delete/remove the assignment submission draft.
 - `put-esys quiz info <ID_OR_URL>`: Show status and attempts for a specific quiz.
 - `put-esys quiz attempt <QUIZ_ID> [ATTEMPT_ID]`: View questions and answers for a specific quiz attempt.
 - `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
@@ -75,6 +77,18 @@ put-esys assignment upload 2863790 "Homework_12.pdf" --name "English_Homework_12
 ### Submitting an assignment (WARNING: IRREVERSIBLE!)
 ```bash
 put-esys assignment submit 2863790
+```
+
+### Editing an assignment submission (online text and files)
+```bash
+put-esys assignment edit 2863790 --text "This is my updated submission text."
+put-esys assignment edit 2863790 --attach additional_file.zip
+put-esys assignment edit 2863790 --remove old_file.pdf
+```
+
+### Deleting/removing an assignment submission
+```bash
+put-esys assignment delete 2863790
 ```
 
 ### Checking quiz status

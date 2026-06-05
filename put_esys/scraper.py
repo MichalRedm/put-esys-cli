@@ -1041,8 +1041,17 @@ def get_assignment_info(assign_id, session=None):
     }, None
 
 
-def save_assignment_submission(session, assign_id, file_path, new_name=None):
-    """Upload a file to an assignment and save the submission changes."""
+def save_assignment_submission(
+    session,
+    assign_id,
+    file_path=None,
+    new_name=None,
+    new_text=None,
+    text_file=None,
+    remove_attachment=None,
+    rename_attachment=None,
+):
+    """Save changes to an assignment submission (draft files and online text)."""
     import re
     from urllib.parse import urljoin
 
@@ -1088,24 +1097,99 @@ def save_assignment_submission(session, assign_id, file_path, new_name=None):
         else:
             data[name] = inp.get("value", "")
 
-    # Extract files_filemanager itemid
     data.pop("cancel", None)
+
+    # Find online text field name if any
+    onlinetext_name = None
+    for key in data:
+        if "onlinetext_editor" in key and key.endswith("[text]"):
+            onlinetext_name = key
+            break
+
+    # Read text from file if provided
+    if text_file:
+        import os
+
+        if not os.path.exists(text_file):
+            raise FileNotFoundError(f"Text file not found: {text_file}")
+        with open(text_file, "r", encoding="utf-8") as f:
+            new_text = f.read()
+
+    # Update online text if provided
+    if new_text is not None:
+        if not onlinetext_name:
+            for textarea in form.find_all("textarea"):
+                t_name = textarea.get("name", "")
+                if "onlinetext" in t_name:
+                    onlinetext_name = t_name
+                    break
+        if not onlinetext_name:
+            raise Exception("This assignment does not support online text submissions.")
+        data[onlinetext_name] = new_text
+
+    # Extract files_filemanager itemid
     itemid = data.get("files_filemanager")
-    if not itemid:
-        raise Exception("Could not find draft item ID (files_filemanager) in the form.")
 
     # Extract context ID
     ctx_match = re.search(r'"contextid":(\d+)', r.text)
     ctx_id = ctx_match.group(1) if ctx_match else None
-    if not ctx_id:
-        raise Exception("Could not find context ID on the assignment page.")
 
-    sesskey = data.get("sesskey")
-    if not sesskey:
-        raise Exception("Could not find session key (sesskey) in the form.")
+    # Handle attachments
+    if file_path or remove_attachment or rename_attachment:
+        if not itemid:
+            raise Exception("This assignment does not support file submissions.")
 
-    # 3. Upload the file
-    upload_draft_file(session, file_path, itemid, ctx_id, sesskey, new_name)
+        if not ctx_id:
+            raise Exception("Could not find context ID on the assignment page.")
+
+        sesskey = data.get("sesskey")
+        if not sesskey:
+            raise Exception("Could not find session key (sesskey) in the form.")
+
+        if file_path:
+            upload_draft_file(session, file_path, itemid, ctx_id, sesskey, new_name)
+
+        if remove_attachment:
+            delete_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
+            params = {
+                "ctx_id": ctx_id,
+                "itemid": itemid,
+                "env": "filemanager",
+                "course": "1",
+                "maxbytes": "0",
+                "areamaxbytes": "-1",
+                "maxfiles": "-1",
+                "subdirs": "0",
+                "sesskey": sesskey,
+                "action": "deletedraft",
+                "draftpath": "/",
+                "filename": remove_attachment,
+            }
+            resp = session.get(delete_url, params=params)
+            resp.raise_for_status()
+
+        if rename_attachment:
+            if not new_name:
+                raise Exception("New name must be provided to rename an attachment.")
+            rename_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
+            params = {
+                "ctx_id": ctx_id,
+                "itemid": itemid,
+                "env": "filemanager",
+                "course": "1",
+                "maxbytes": "0",
+                "areamaxbytes": "-1",
+                "maxfiles": "-1",
+                "subdirs": "0",
+                "sesskey": sesskey,
+                "action": "rename",
+                "draftpath": "/",
+            }
+            post_data = {"newfilename": new_name, "filename": rename_attachment, "draftpath": "/"}
+            resp = session.post(rename_url, params=params, data=post_data)
+            resp.raise_for_status()
+            if "errormessage" in resp.text or "errorcode" in resp.text:
+                raise Exception(f"File renaming failed: {resp.text}")
 
     # 4. Submit the form data
     post_url = form.get("action")
@@ -1126,6 +1210,51 @@ def save_assignment_submission(session, assign_id, file_path, new_name=None):
             raise Exception(f"Failed to save assignment: {err_msg.get_text(strip=True)}")
         raise Exception("Failed to save assignment: redirected back to edit page.")
 
+    return True
+
+
+def delete_assignment_submission(session, assign_id):
+    """Delete/remove the assignment submission."""
+    from urllib.parse import urljoin
+
+    from bs4 import BeautifulSoup
+
+    # 1. Fetch confirmation page
+    url = f"https://ekursy.put.poznan.pl/mod/assign/view.php?id={assign_id}&action=removesubmissionconfirm"
+    r = session.get(url)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # 2. Find the removesubmission form
+    form = None
+    for f in soup.select("form"):
+        action_attr = f.get("action", "")
+        method_attr = f.get("method", "").lower()
+        if "mod/assign/view.php" in action_attr and method_attr == "post":
+            if f.find("input", attrs={"name": "action", "value": "removesubmission"}):
+                form = f
+                break
+
+    if not form:
+        raise Exception(
+            "Could not find the assignment removal form on the confirmation page. "
+            "Is the assignment already empty, or is deletion not allowed?"
+        )
+
+    # 3. Extract form inputs
+    data = {}
+    for inp in form.find_all(["input", "button"]):
+        name = inp.get("name")
+        if name:
+            data[name] = inp.get("value", "")
+
+    post_url = form.get("action")
+    if not post_url.startswith("http"):
+        post_url = urljoin(url, post_url)
+
+    # 4. POST to delete
+    post_resp = session.post(post_url, data=data)
+    post_resp.raise_for_status()
     return True
 
 
