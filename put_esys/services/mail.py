@@ -7,7 +7,9 @@ from email.header import decode_header
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Dict, List, Optional
+from typing import List, Optional
+
+from put_esys.models.mail import EmailDetails, EmailSummary
 
 
 class MailClient:
@@ -19,20 +21,19 @@ class MailClient:
         self.smtp_server = "poczta.student.put.poznan.pl"
         self.smtp_port = 465  # SSL
 
-    def _connect_imap(self):
+    def _connect_imap(self) -> imaplib.IMAP4_SSL:
         mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
         mail.login(self.username, self.password)
         return mail
 
     def list_emails(
         self, folder="INBOX", limit=10, search_query: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> List[EmailSummary]:
         mail = self._connect_imap()
         try:
             mail.select(folder)
 
             if search_query:
-                # IMAP expects literal string for search
                 status, messages = mail.search(None, "TEXT", f'"{search_query}"')
             else:
                 status, messages = mail.search(None, "ALL")
@@ -73,18 +74,18 @@ class MailClient:
                                 from_ = from_.decode("utf-8", errors="replace")
 
                         email_list.append(
-                            {
-                                "id": mail_id.decode(),
-                                "subject": str(subject),
-                                "from": str(from_),
-                                "date": msg.get("Date"),
-                            }
+                            EmailSummary(
+                                id=mail_id.decode(),
+                                subject=str(subject),
+                                from_=str(from_),
+                                date=msg.get("Date"),
+                            )
                         )
             return email_list
         finally:
             mail.logout()
 
-    def get_email_details(self, mail_id, folder="INBOX") -> Optional[Dict]:
+    def get_email_details(self, mail_id, folder="INBOX") -> Optional[EmailDetails]:
         mail = self._connect_imap()
         try:
             mail.select(folder)
@@ -155,14 +156,14 @@ class MailClient:
                         except Exception:
                             body = "[Could not decode body]"
 
-                    return {
-                        "id": str(mail_id),
-                        "subject": str(subject),
-                        "from": str(from_),
-                        "date": msg.get("Date"),
-                        "body": body,
-                        "attachments": attachments,
-                    }
+                    return EmailDetails(
+                        id=str(mail_id),
+                        subject=str(subject),
+                        from_=str(from_),
+                        date=msg.get("Date"),
+                        body=body,
+                        attachments=attachments,
+                    )
             return None
         finally:
             mail.logout()
@@ -209,7 +210,9 @@ class MailClient:
         finally:
             mail.logout()
 
-    def send_email(self, to_address, subject, body, attachment_paths: Optional[List[str]] = None):
+    def send_email(
+        self, to_address, subject, body, attachment_paths: Optional[List[str]] = None
+    ) -> None:
         msg = MIMEMultipart()
         msg["From"] = self.username
         msg["To"] = to_address
