@@ -10,58 +10,62 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
+
 class AuthError(Exception):
     pass
+
 
 def authenticate(username, password):
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT})
 
     # 1. elogin authorize
-    resp = session.get("https://elogin.put.poznan.pl/app/authorize?system=ekursy.esys.put.poznan.pl")
-    soup = BeautifulSoup(resp.text, 'html.parser')
-    csrf_token = soup.find('input', {'name': 'csrf_token'}).get('value')
-    
+    resp = session.get(
+        "https://elogin.put.poznan.pl/app/authorize?system=ekursy.esys.put.poznan.pl"
+    )
+    soup = BeautifulSoup(resp.text, "html.parser")
+    csrf_token = soup.find("input", {"name": "csrf_token"}).get("value")
+
     # 2. elogin login POST
     # We post to the URL we are currently on (which contains the redirect_path)
     login_url = resp.url
     resp = session.post(
         login_url,
-        data={'login': username, 'password': password, 'csrf_token': csrf_token, 'send': ''},
-        headers={"Referer": resp.url}
+        data={"login": username, "password": password, "csrf_token": csrf_token, "send": ""},
+        headers={"Referer": resp.url},
     )
 
     # 3. Follow all auto-submit forms
     # We loop up to 5 times to avoid infinite recursion
     for _ in range(5):
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        soup = BeautifulSoup(resp.text, "html.parser")
         # Look for any form that is submitted via JS (common in SSO)
         form = (
-            soup.find('form', {'id': 'redirectForm'}) or 
-            soup.find('form', {'name': 'frm'}) or
-            soup.find('form')
+            soup.find("form", {"id": "redirectForm"})
+            or soup.find("form", {"name": "frm"})
+            or soup.find("form")
         )
-        
+
         if form:
-            action = form.get('action')
+            action = form.get("action")
             if not action:
                 break
             action_url = urljoin(resp.url, action)
-            
+
             form_data = {
-                inp.get('name'): inp.get('value', '')
-                for inp in form.find_all('input', {'type': 'hidden'})
-                if inp.get('name')
+                inp.get("name"): inp.get("value", "")
+                for inp in form.find_all("input", {"type": "hidden"})
+                if inp.get("name")
             }
-            
+
             # If no hidden inputs, maybe they are just normal inputs (like in our debug dump)
             if not form_data:
                 form_data = {
-                    inp.get('name'): inp.get('value', '')
-                    for inp in form.find_all('input')
-                    if inp.get('name')
+                    inp.get("name"): inp.get("value", "")
+                    for inp in form.find_all("input")
+                    if inp.get("name")
                 }
-            
+
             # Post the form
             resp = session.post(action_url, data=form_data, headers={"Referer": resp.url})
         else:
@@ -69,16 +73,17 @@ def authenticate(username, password):
 
     # Final check
     all_cookies = {cookie.name: cookie.value for cookie in session.cookies}
-    
+
     if "MoodleSession" in all_cookies or "ekursy.put.poznan.pl" in resp.url:
         save_session(all_cookies)
         return True
     else:
         # Check for error message in the final page if it failed
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        error_msg = soup.find(class_=lambda x: x and 'alert' in x)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        error_msg = soup.find(class_=lambda x: x and "alert" in x)
         error_text = error_msg.get_text(strip=True) if error_msg else "Unknown error"
         raise AuthError(f"Authentication failed: {error_text}. Final URL: {resp.url}")
+
 
 def get_authenticated_session():
     cookies = load_session()
@@ -89,14 +94,15 @@ def get_authenticated_session():
     session.cookies.update(cookies)
     return session
 
+
 def ensure_authenticated_session():
     """
     Ensures we have a valid session. If not, tries to log in using stored credentials.
     """
     from .config import load_credentials
-    
+
     session = get_authenticated_session()
-    
+
     # Check if session is valid by hitting the dashboard
     is_valid = False
     if session:
@@ -106,19 +112,19 @@ def ensure_authenticated_session():
                 is_valid = True
         except Exception:
             pass
-            
+
     if is_valid:
         return session
-        
+
     # Not valid, try to log in using stored credentials
     creds = load_credentials()
     if not creds:
         return None
-        
+
     try:
-        if authenticate(creds['username'], creds['password']):
+        if authenticate(creds["username"], creds["password"]):
             return get_authenticated_session()
     except Exception:
         pass
-        
+
     return None

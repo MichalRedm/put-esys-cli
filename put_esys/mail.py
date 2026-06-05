@@ -30,13 +30,13 @@ class MailClient:
         mail = self._connect_imap()
         try:
             mail.select(folder)
-            
+
             if search_query:
                 # IMAP expects literal string for search
-                status, messages = mail.search(None, 'TEXT', f'"{search_query}"')
+                status, messages = mail.search(None, "TEXT", f'"{search_query}"')
             else:
                 status, messages = mail.search(None, "ALL")
-                
+
             if status != "OK":
                 return []
 
@@ -53,7 +53,7 @@ class MailClient:
                 for response_part in msg_data:
                     if isinstance(response_part, tuple):
                         msg = email.message_from_bytes(response_part[1])
-                        
+
                         subject_raw = decode_header(msg.get("Subject", ""))[0]
                         subject = subject_raw[0]
                         if isinstance(subject, bytes):
@@ -72,12 +72,14 @@ class MailClient:
                             except LookupError:
                                 from_ = from_.decode("utf-8", errors="replace")
 
-                        email_list.append({
-                            "id": mail_id.decode(),
-                            "subject": str(subject),
-                            "from": str(from_),
-                            "date": msg.get("Date")
-                        })
+                        email_list.append(
+                            {
+                                "id": mail_id.decode(),
+                                "subject": str(subject),
+                                "from": str(from_),
+                                "date": msg.get("Date"),
+                            }
+                        )
             return email_list
         finally:
             mail.logout()
@@ -93,7 +95,7 @@ class MailClient:
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
-                    
+
                     subject_raw = decode_header(msg.get("Subject", ""))[0]
                     subject = subject_raw[0]
                     if isinstance(subject, bytes):
@@ -118,12 +120,11 @@ class MailClient:
                         for part in msg.walk():
                             content_type = part.get_content_type()
                             content_disposition = str(part.get("Content-Disposition"))
-                            
-                            is_attach = (
-                                "attachment" in content_disposition
-                                or ("inline" in content_disposition and part.get_filename())
+
+                            is_attach = "attachment" in content_disposition or (
+                                "inline" in content_disposition and part.get_filename()
                             )
-                            
+
                             if is_attach:
                                 filename = part.get_filename()
                                 if filename:
@@ -160,7 +161,7 @@ class MailClient:
                         "from": str(from_),
                         "date": msg.get("Date"),
                         "body": body,
-                        "attachments": attachments
+                        "attachments": attachments,
                     }
             return None
         finally:
@@ -182,11 +183,10 @@ class MailClient:
 
                     for part in msg.walk():
                         content_disposition = str(part.get("Content-Disposition"))
-                        is_attach = (
-                            "attachment" in content_disposition
-                            or ("inline" in content_disposition and part.get_filename())
+                        is_attach = "attachment" in content_disposition or (
+                            "inline" in content_disposition and part.get_filename()
                         )
-                        
+
                         if is_attach:
                             part_filename = part.get_filename()
                             if part_filename:
@@ -198,7 +198,7 @@ class MailClient:
                                         fname = fname.decode(encoding, errors="replace")
                                     except LookupError:
                                         fname = fname.decode("utf-8", errors="replace")
-                                
+
                                 if str(fname) == filename:
                                     payload = part.get_payload(decode=True)
                                     if payload:
@@ -211,11 +211,11 @@ class MailClient:
 
     def send_email(self, to_address, subject, body, attachment_paths: Optional[List[str]] = None):
         msg = MIMEMultipart()
-        msg['From'] = self.username
-        msg['To'] = to_address
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-        
+        msg["From"] = self.username
+        msg["To"] = to_address
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+
         if attachment_paths:
             for filepath in attachment_paths:
                 if not os.path.isfile(filepath):
@@ -224,7 +224,7 @@ class MailClient:
                 with open(filepath, "rb") as attachment:
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(attachment.read())
-                
+
                 encoders.encode_base64(part)
                 part.add_header(
                     "Content-Disposition",
