@@ -22,8 +22,10 @@ from .scraper import (
     get_ekursy_courses,
     get_quiz_attempt,
     get_quiz_info,
+    save_assignment_submission,
     save_quiz_answer,
     start_quiz_attempt,
+    submit_assignment_submission,
     submit_quiz_attempt,
 )
 
@@ -290,6 +292,91 @@ def assignment_show(id_or_url: str = typer.Argument(..., help="Assignment ID or 
                 table.add_row(row["key"], val_text)
 
             console.print(table)
+
+
+@assignment_app.command("upload")
+def assignment_upload(
+    id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
+    file_path: str = typer.Argument(..., help="Path to the file to upload"),
+    name: Optional[str] = typer.Option(None, "--name", help="New filename on upload"),
+):
+    """Upload a file to an assignment and save the submission changes."""
+    assign_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            assign_id = match.group(1)
+        else:
+            console.print("[red]Could not parse assignment ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"Uploading [bold]{file_path}[/bold] to assignment [bold]{assign_id}[/bold]...")
+    with console.status("[bold green]Saving assignment submission..."):
+        try:
+            save_assignment_submission(session, assign_id, file_path, name)
+            console.print("[bold green]Successfully saved assignment submission.[/bold green]")
+        except Exception as e:
+            console.print(f"[red]Failed to upload file: {e}[/red]")
+            raise typer.Exit(code=1)
+
+
+@assignment_app.command("submit")
+def assignment_submit(
+    id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Submit without asking for confirmation."
+    ),
+):
+    """Finalize and submit the assignment submission. WARNING: This action is irreversible!"""
+    assign_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            assign_id = match.group(1)
+        else:
+            console.print("[red]Could not parse assignment ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        raise typer.Exit(code=1)
+
+    if not force:
+        msg = (
+            f"[bold red]WARNING:[/bold red] You are about to submit "
+            f"[bold]Assignment {assign_id}[/bold].\n"
+            f"[bold yellow]THIS ACTION IS IRREVERSIBLE![/bold yellow] "
+            "Your answers/files will be submitted for grading."
+        )
+        console.print(Panel(msg, border_style="red", title="Confirm Assignment Submission"))
+
+        confirm = typer.confirm("Are you absolutely sure you want to submit and finish?")
+        if not confirm:
+            console.print("[yellow]Submission cancelled.[/yellow]")
+            return
+
+    with console.status(f"[bold green]Submitting Assignment {assign_id}..."):
+        try:
+            success, error = submit_assignment_submission(session, assign_id)
+            if success:
+                console.print(
+                    f"[bold green]Successfully submitted and finalized "
+                    f"Assignment {assign_id}![/bold green]"
+                )
+                if error:
+                    console.print(f"[yellow]{error}[/yellow]")
+            else:
+                console.print(f"[red]Failed to submit assignment: {error}[/red]")
+                raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]Error submitting assignment: {e}[/red]")
+            raise typer.Exit(1)
 
 
 @app.command()

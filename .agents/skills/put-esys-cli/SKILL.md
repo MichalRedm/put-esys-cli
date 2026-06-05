@@ -26,6 +26,8 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 ### eKursy
 - `put-esys course <ID_OR_URL>`: Display the content (sections and activities) of a specific course.
 - `put-esys assignment show <ID_OR_URL>`: Show content and status of a specific assignment.
+- `put-esys assignment upload <ID_OR_URL> <FILE_PATH> [--name NEW_NAME]`: Upload a file to an assignment (optionally under a custom name via `--name`) and save the submission changes.
+- `put-esys assignment submit <ID_OR_URL> [--force]`: Finalize and submit the assignment submission. WARNING: This action is irreversible!
 - `put-esys quiz info <ID_OR_URL>`: Show status and attempts for a specific quiz.
 - `put-esys quiz attempt <QUIZ_ID> [ATTEMPT_ID]`: View questions and answers for a specific quiz attempt.
 - `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
@@ -58,6 +60,21 @@ put-esys course show 12345
 ### Viewing assignment details
 ```bash
 put-esys assignment show 2841810
+```
+
+### Uploading an assignment file
+```bash
+put-esys assignment upload 2863790 "Homework_12.pdf"
+```
+
+### Uploading an assignment file with a custom name
+```bash
+put-esys assignment upload 2863790 "Homework_12.pdf" --name "English_Homework_12.pdf"
+```
+
+### Submitting an assignment (WARNING: IRREVERSIBLE!)
+```bash
+put-esys assignment submit 2863790
 ```
 
 ### Checking quiz status

@@ -630,6 +630,47 @@ def get_quiz_attempt(quiz_id, attempt_id, session=None):
     return {"quiz_id": quiz_id, "attempt_id": attempt_id, "questions": questions}, None
 
 
+def upload_draft_file(session, file_path, itemid, ctx_id, sesskey, new_name=None):
+    """Upload a file to Moodle's draft files repository."""
+    import os
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Attachment file not found: {file_path}")
+
+    if not itemid:
+        raise Exception("Moodle draft item ID (itemid) is required for file uploads.")
+
+    if not ctx_id:
+        raise Exception("Moodle context ID (ctx_id) is required for file uploads.")
+
+    if not sesskey:
+        raise Exception("Session key (sesskey) is required for file uploads.")
+
+    upload_filename = new_name if new_name else os.path.basename(file_path)
+
+    upload_url = "https://ekursy.put.poznan.pl/repository/repository_ajax.php?action=upload"
+    payload = {
+        "action": "upload",
+        "repo_id": "4",  # Upload a file repo
+        "sesskey": sesskey,
+        "client_id": "6a11b8466c708",  # Hardcoded unique client ID
+        "itemid": itemid,
+        "ctx_id": ctx_id,
+        "savepath": "/",
+        "license": "allrightsreserved",
+        "author": "",
+        "title": upload_filename,
+    }
+
+    with open(file_path, "rb") as f:
+        files = {"repo_upload_file": f}
+        resp = session.post(upload_url, data=payload, files=files)
+        resp.raise_for_status()
+        if "error" in resp.text:
+            raise Exception(f"File upload failed: {resp.text}")
+    return True
+
+
 def save_quiz_answer(
     session,
     quiz_id,
@@ -696,11 +737,6 @@ def save_quiz_answer(
 
     # 5. Handle file attachment upload if requested
     if attachment_path:
-        import os
-
-        if not os.path.exists(attachment_path):
-            raise FileNotFoundError(f"Attachment file not found: {attachment_path}")
-
         if not itemid:
             raise Exception(f"Question {question_number} does not support file attachments.")
 
@@ -711,29 +747,7 @@ def save_quiz_answer(
         if not sesskey:
             raise Exception("Could not find session key (sesskey).")
 
-        # Use new_name as custom filename if provided, otherwise fallback to basename of path
-        upload_filename = new_name if new_name else os.path.basename(attachment_path)
-
-        upload_url = "https://ekursy.put.poznan.pl/repository/repository_ajax.php?action=upload"
-        payload = {
-            "action": "upload",
-            "repo_id": "4",  # Upload a file
-            "sesskey": sesskey,
-            "client_id": "6a11b8466c708",  # Hardcoded unique client ID
-            "itemid": itemid,
-            "ctx_id": ctx_id,
-            "savepath": "/",
-            "license": "allrightsreserved",
-            "author": "",
-            "title": upload_filename,
-        }
-
-        with open(attachment_path, "rb") as f:
-            files = {"repo_upload_file": f}
-            resp = session.post(upload_url, data=payload, files=files)
-            resp.raise_for_status()
-            if "error" in resp.text:
-                raise Exception(f"File upload failed: {resp.text}")
+        upload_draft_file(session, attachment_path, itemid, ctx_id, sesskey, new_name)
 
     # 6. Handle file attachment removal if requested
     if remove_attachment:
@@ -1025,3 +1039,166 @@ def get_assignment_info(assign_id, session=None):
         "intro": intro,
         "tables": tables_data,
     }, None
+
+
+def save_assignment_submission(session, assign_id, file_path, new_name=None):
+    """Upload a file to an assignment and save the submission changes."""
+    import re
+    from urllib.parse import urljoin
+
+    from bs4 import BeautifulSoup
+
+    # 1. Fetch the editsubmission page
+    url = f"https://ekursy.put.poznan.pl/mod/assign/view.php?id={assign_id}&action=editsubmission"
+    r = session.get(url)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # 2. Find the submission form
+    form = None
+    for f in soup.select("form"):
+        action_attr = f.get("action", "")
+        method_attr = f.get("method", "").lower()
+        if "mod/assign/view.php" in action_attr and method_attr == "post":
+            if f.find("input", attrs={"name": "action", "value": "savesubmission"}):
+                form = f
+                break
+
+    if not form:
+        raise Exception(
+            "Could not find the assignment submission form. "
+            "Is the assignment closed or already submitted?"
+        )
+
+    data = {}
+    # Extract all inputs to preserve state
+    for inp in form.find_all(["input", "textarea", "select"]):
+        name = inp.get("name")
+        if not name:
+            continue
+
+        if inp.name == "textarea":
+            data[name] = inp.get_text()
+        elif inp.get("type") == "checkbox":
+            if inp.has_attr("checked"):
+                data[name] = inp.get("value", "1")
+        elif inp.get("type") == "radio":
+            if inp.has_attr("checked"):
+                data[name] = inp.get("value")
+        else:
+            data[name] = inp.get("value", "")
+
+    # Extract files_filemanager itemid
+    data.pop("cancel", None)
+    itemid = data.get("files_filemanager")
+    if not itemid:
+        raise Exception("Could not find draft item ID (files_filemanager) in the form.")
+
+    # Extract context ID
+    ctx_match = re.search(r'"contextid":(\d+)', r.text)
+    ctx_id = ctx_match.group(1) if ctx_match else None
+    if not ctx_id:
+        raise Exception("Could not find context ID on the assignment page.")
+
+    sesskey = data.get("sesskey")
+    if not sesskey:
+        raise Exception("Could not find session key (sesskey) in the form.")
+
+    # 3. Upload the file
+    upload_draft_file(session, file_path, itemid, ctx_id, sesskey, new_name)
+
+    # 4. Submit the form data
+    post_url = form.get("action")
+    if not post_url.startswith("http"):
+        post_url = urljoin(url, post_url)
+
+    # Trigger submit button name
+    data["submitbutton"] = "Zapisz zmiany"
+
+    post_resp = session.post(post_url, data=data)
+    post_resp.raise_for_status()
+
+    # Verify redirection or response content
+    if "action=editsubmission" in post_resp.url:
+        err_soup = BeautifulSoup(post_resp.text, "html.parser")
+        err_msg = err_soup.select_one(".error")
+        if err_msg:
+            raise Exception(f"Failed to save assignment: {err_msg.get_text(strip=True)}")
+        raise Exception("Failed to save assignment: redirected back to edit page.")
+
+    return True
+
+
+def submit_assignment_submission(session, assign_id):
+    """Finalize and submit the assignment submission."""
+    from urllib.parse import urljoin
+
+    from bs4 import BeautifulSoup
+
+    # 1. Fetch main page to find the submit form
+    url = f"https://ekursy.put.poznan.pl/mod/assign/view.php?id={assign_id}"
+    r = session.get(url)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    submit_form = None
+    for f in soup.select("form"):
+        if f.find("input", attrs={"name": "action", "value": "submit"}):
+            submit_form = f
+            break
+
+    if not submit_form:
+        # If there's no final submit button, maybe it's not required or already finalized
+        return True, (
+            "No final submission button found (it might be already submitted or not required)."
+        )
+
+    # 2. Post to the submit form to load confirmation page
+    post_data = {}
+    for inp in submit_form.find_all(["input", "button"]):
+        name = inp.get("name")
+        if name:
+            post_data[name] = inp.get("value", "")
+
+    post_url = submit_form.get("action")
+    if not post_url.startswith("http"):
+        post_url = urljoin(url, post_url)
+
+    confirm_resp = session.post(post_url, data=post_data)
+    confirm_resp.raise_for_status()
+
+    # 3. Parse confirmation page and submit
+    conf_soup = BeautifulSoup(confirm_resp.text, "html.parser")
+    conf_form = None
+    for f in conf_soup.select("form"):
+        if f.find("input", attrs={"name": "id", "value": str(assign_id)}):
+            conf_form = f
+            break
+
+    if not conf_form:
+        conf_form = conf_soup.select_one(".singlebutton form") or conf_soup.select_one("form")
+
+    if not conf_form:
+        return False, "Could not find confirmation form on the confirmation page."
+
+    conf_data = {}
+    for inp in conf_form.find_all(["input", "button"]):
+        name = inp.get("name")
+        if name:
+            if inp.get("type") == "checkbox":
+                conf_data[name] = "1"
+            else:
+                conf_data[name] = inp.get("value", "")
+
+    # Check the submission statement if Moodle requires it
+    if conf_form.find("input", attrs={"name": "submissionstatement"}):
+        conf_data["submissionstatement"] = "1"
+
+    conf_url = conf_form.get("action")
+    if not conf_url.startswith("http"):
+        conf_url = urljoin(url, conf_url)
+
+    final_resp = session.post(conf_url, data=conf_data)
+    final_resp.raise_for_status()
+
+    return True, None
