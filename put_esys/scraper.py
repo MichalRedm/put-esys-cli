@@ -932,3 +932,60 @@ def submit_quiz_attempt(session, quiz_id, attempt_id):
         return True, None
 
     return False, "Could not confirm successful submission from the redirection URL."
+
+
+def get_assignment_info(assign_id, session=None):
+    if not session:
+        session = get_authenticated_session()
+
+    if not session:
+        return None, "Not authenticated."
+
+    url = f"https://ekursy.put.poznan.pl/mod/assign/view.php?id={assign_id}"
+    try:
+        resp = session.get(url)
+        resp.raise_for_status()
+    except Exception as e:
+        return None, f"Failed to access assignment page: {e}"
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    title = soup.find("h1").get_text(strip=True) if soup.find("h1") else "Unknown Assignment"
+
+    # Extract description
+    intro_div = (
+        soup.find(id="intro")
+        or soup.select_one(".box.generalbox")
+        or soup.select_one(".assignmentdescription")
+        or soup.select_one(".activity-description")
+    )
+    intro = str(intro_div) if intro_div else ""
+
+    # Extract tables
+    tables_data = []
+    for table in soup.select("table.generaltable"):
+        table_rows = []
+        for row in table.select("tr"):
+            th = row.find("th")
+            td = row.find("td")
+            if th and td:
+                key = th.get_text(strip=True)
+                val = td.get_text(strip=True)
+
+                # Check for attachments inside this td
+                files = []
+                for a in td.select("a"):
+                    href = a.get("href", "")
+                    if "pluginfile.php" in href or "draftfile.php" in href:
+                        files.append({"name": a.get_text(strip=True), "url": href})
+
+                table_rows.append({"key": key, "value": val, "files": files})
+        if table_rows:
+            tables_data.append(table_rows)
+
+    return {
+        "id": assign_id,
+        "title": title,
+        "intro": intro,
+        "tables": tables_data,
+    }, None

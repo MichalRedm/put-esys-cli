@@ -17,6 +17,7 @@ from .auth import authenticate, ensure_authenticated_session
 from .config import clear_credentials, load_credentials, save_credentials
 from .mail import MailClient
 from .scraper import (
+    get_assignment_info,
     get_course_content,
     get_ekursy_courses,
     get_quiz_attempt,
@@ -39,11 +40,13 @@ config_app = typer.Typer(help="Manage your PUT credentials")
 course_app = typer.Typer(help="Manage courses and content")
 quiz_app = typer.Typer(help="Manage quizzes and attempts")
 mail_app = typer.Typer(help="Manage your PUT email")
+assignment_app = typer.Typer(help="Manage assignments")
 
 app.add_typer(config_app, name="config")
 app.add_typer(course_app, name="course")
 app.add_typer(quiz_app, name="quiz")
 app.add_typer(mail_app, name="mail")
+app.add_typer(assignment_app, name="assignment")
 
 console = Console()
 
@@ -226,6 +229,67 @@ def course_show(id_or_url: str = typer.Argument(..., help="Course ID or eKursy U
                     activity_node.add(child_label)
 
     console.print(tree)
+
+
+@assignment_app.command("show")
+def assignment_show(id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL")):
+    """Show content and status of a specific assignment."""
+    # Extract ID if URL is provided
+    assign_id = id_or_url
+    if id_or_url.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            assign_id = match.group(1)
+        else:
+            console.print("[red]Could not parse assignment ID from URL.[/red]")
+            raise typer.Exit(code=1)
+
+    console.print(f"Fetching assignment [bold]{assign_id}[/bold]...")
+
+    session = ensure_authenticated_session()
+    if not session:
+        console.print("[red]Not authenticated.[/red]")
+        console.print("Please run [bold]put-esys config set[/bold] first.")
+        raise typer.Exit(code=1)
+
+    info, error = get_assignment_info(assign_id, session)
+    if error:
+        console.print(f"[red]Error: {error}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"\n[bold white on blue] {info['title']} [/bold white on blue]")
+
+    # Display description/intro if present
+    if info["intro"]:
+        intro_md = markdownify(info["intro"]).strip()
+        intro_md = re.sub(r"!\[.*?\]\(.*?\)", "", intro_md)
+        intro_md = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r"[\1] (\2)", intro_md)
+        console.print(Panel(Markdown(intro_md), title="Instructions", border_style="blue"))
+
+    # Display tables (submission status, feedback, etc.)
+    if not info["tables"]:
+        console.print("[yellow]No tables or status found for this assignment.[/yellow]")
+    else:
+        for idx, table_rows in enumerate(info["tables"], 1):
+            title = (
+                f"Assignment Details (Table {idx})"
+                if len(info["tables"]) > 1
+                else "Assignment Status"
+            )
+            table = Table(title=title, show_header=True)
+            table.add_column("Property", style="cyan", no_wrap=True)
+            table.add_column("Value", style="magenta", overflow="fold")
+
+            for row in table_rows:
+                val_text = row["value"]
+                # If there are files, append them to the text explicitly
+                if row["files"]:
+                    files_str = "\n".join([f"• {f['name']} ({f['url']})" for f in row["files"]])
+                    val_text += f"\n\n[bold yellow]Submitted Files:[/bold yellow]\n{files_str}"
+
+                table.add_row(row["key"], val_text)
+
+            console.print(table)
 
 
 @app.command()

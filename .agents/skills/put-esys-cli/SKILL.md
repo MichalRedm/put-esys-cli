@@ -25,6 +25,7 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 
 ### eKursy
 - `put-esys course <ID_OR_URL>`: Display the content (sections and activities) of a specific course.
+- `put-esys assignment show <ID_OR_URL>`: Show content and status of a specific assignment.
 - `put-esys quiz info <ID_OR_URL>`: Show status and attempts for a specific quiz.
 - `put-esys quiz attempt <QUIZ_ID> [ATTEMPT_ID]`: View questions and answers for a specific quiz attempt.
 - `put-esys quiz start <QUIZ_ID>`: Start a new quiz attempt.
@@ -52,6 +53,11 @@ put-esys course list
 ### Viewing course content
 ```bash
 put-esys course show 12345
+```
+
+### Viewing assignment details
+```bash
+put-esys assignment show 2841810
 ```
 
 ### Checking quiz status
