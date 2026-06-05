@@ -1,9 +1,10 @@
+from typing import Optional
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
-from .config import load_session, save_session
+from .config import load_credentials, load_session, save_session
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -15,7 +16,7 @@ class AuthError(Exception):
     pass
 
 
-def authenticate(username, password):
+def authenticate(username, password) -> bool:
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT})
 
@@ -27,7 +28,6 @@ def authenticate(username, password):
     csrf_token = soup.find("input", {"name": "csrf_token"}).get("value")
 
     # 2. elogin login POST
-    # We post to the URL we are currently on (which contains the redirect_path)
     login_url = resp.url
     resp = session.post(
         login_url,
@@ -36,10 +36,8 @@ def authenticate(username, password):
     )
 
     # 3. Follow all auto-submit forms
-    # We loop up to 5 times to avoid infinite recursion
     for _ in range(5):
         soup = BeautifulSoup(resp.text, "html.parser")
-        # Look for any form that is submitted via JS (common in SSO)
         form = (
             soup.find("form", {"id": "redirectForm"})
             or soup.find("form", {"name": "frm"})
@@ -58,7 +56,6 @@ def authenticate(username, password):
                 if inp.get("name")
             }
 
-            # If no hidden inputs, maybe they are just normal inputs (like in our debug dump)
             if not form_data:
                 form_data = {
                     inp.get("name"): inp.get("value", "")
@@ -85,7 +82,7 @@ def authenticate(username, password):
         raise AuthError(f"Authentication failed: {error_text}. Final URL: {resp.url}")
 
 
-def get_authenticated_session():
+def get_authenticated_session() -> Optional[requests.Session]:
     cookies = load_session()
     if not cookies:
         return None
@@ -95,12 +92,10 @@ def get_authenticated_session():
     return session
 
 
-def ensure_authenticated_session():
+def ensure_authenticated_session() -> Optional[requests.Session]:
     """
     Ensures we have a valid session. If not, tries to log in using stored credentials.
     """
-    from .config import load_credentials
-
     session = get_authenticated_session()
 
     # Check if session is valid by hitting the dashboard

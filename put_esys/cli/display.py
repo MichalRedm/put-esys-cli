@@ -1,0 +1,219 @@
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
+from rich.tree import Tree
+
+from put_esys.models.assignment import AssignmentInfo
+from put_esys.models.course import Course, CourseContent
+from put_esys.models.mail import EmailDetails, EmailSummary
+from put_esys.models.quiz import QuizAttemptDetails, QuizInfo
+from put_esys.utils.markdown import html_to_markdown
+
+console = Console()
+
+
+def get_activity_icon(activity_type: str) -> str:
+    """Get a display icon/prefix for an activity type."""
+    icons = {
+        "folder": "[DIR]",
+        "resource": "[FILE]",
+        "assign": "[ASSIGN]",
+        "quiz": "[QUIZ]",
+        "forum": "[FORUM]",
+        "url": "[URL]",
+    }
+    return icons.get(activity_type, "[FILE]")
+
+
+def display_courses_list(courses: list[Course]) -> None:
+    """Renders the enrolled courses table."""
+    table = Table(title=f"Enrolled Courses ({len(courses)})")
+    table.add_column("#", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Course Title", style="magenta")
+    table.add_column("URL", style="blue")
+
+    for i, course in enumerate(courses, 1):
+        table.add_row(str(i), course.title, course.url)
+
+    console.print(table)
+
+
+def display_course_content(content: CourseContent) -> None:
+    """Renders the course structure tree."""
+    tree = Tree(f"[bold white on blue] {content.title} [/bold white on blue]")
+
+    for section in content.sections:
+        section_tree = tree.add(f"[bold cyan]{section.name}[/bold cyan]")
+        for activity in section.activities:
+            if activity.type == "label":
+                raw_content = activity.content or activity.name or ""
+                label_md_text = html_to_markdown(raw_content)
+                if label_md_text:
+                    section_tree.add(Markdown(label_md_text))
+                continue
+
+            icon = get_activity_icon(activity.type)
+            label = f"{icon} [magenta]{activity.name}[/magenta]"
+            if activity.url:
+                label += f" ([blue]{activity.url}[/blue])"
+
+            activity_node = section_tree.add(label)
+
+            # Additional description/content
+            if activity.content:
+                desc_md_text = html_to_markdown(activity.content)
+                if desc_md_text:
+                    activity_node.add(Markdown(desc_md_text))
+
+            # Render children
+            if activity.children:
+                for child in activity.children:
+                    child_icon = get_activity_icon(child.type)
+                    child_label = f"{child_icon} [magenta]{child.name}[/magenta]"
+                    if child.url:
+                        child_label += f" ([blue]{child.url}[/blue])"
+                    activity_node.add(child_label)
+
+    console.print(tree)
+
+
+def display_assignment(info: AssignmentInfo) -> None:
+    """Renders the assignment details and submission tables."""
+    console.print(f"\n[bold white on blue] {info.title} [/bold white on blue]")
+
+    # Display description/intro if present
+    if info.intro:
+        intro_md = html_to_markdown(info.intro)
+        console.print(Panel(Markdown(intro_md), title="Instructions", border_style="blue"))
+
+    # Display tables (submission status, feedback, etc.)
+    if not info.tables:
+        console.print("[yellow]No tables or status found for this assignment.[/yellow]")
+    else:
+        for idx, table_rows in enumerate(info.tables, 1):
+            title = (
+                f"Assignment Details (Table {idx})" if len(info.tables) > 1 else "Assignment Status"
+            )
+            table = Table(title=title, show_header=True)
+            table.add_column("Property", style="cyan", no_wrap=True)
+            table.add_column("Value", style="magenta", overflow="fold")
+
+            for row in table_rows:
+                val_text = row.value
+                if row.files:
+                    files_str = "\n".join([f"• {f.name} ({f.url})" for f in row.files])
+                    val_text += f"\n\n[bold yellow]Submitted Files:[/bold yellow]\n{files_str}"
+
+                table.add_row(row.key, val_text)
+
+            console.print(table)
+
+
+def display_quiz_info(info: QuizInfo, quiz_id: str) -> None:
+    """Renders the quiz summary information and attempts."""
+    console.print(f"\n[bold white on blue] {info.title} [/bold white on blue]")
+
+    if info.intro:
+        intro_md = html_to_markdown(info.intro, strip_images=False, format_links=False)
+        console.print(Panel(Markdown(intro_md), title="Description", border_style="blue"))
+
+    if info.info:
+        info_text = "\n".join([f"• {p}" for p in info.info])
+        console.print(Panel(info_text, title="Quiz Information", border_style="cyan"))
+    else:
+        console.print(f"[bold]Grading Method:[/bold] {info.grading_method}\n")
+
+    if not info.attempts:
+        console.print("[yellow]No attempts found for this quiz.[/yellow]")
+    else:
+        table = Table(title="Your Attempts")
+        table.add_column("Attempt", style="cyan")
+        table.add_column("ID", style="yellow")
+        table.add_column("Status", style="magenta")
+        table.add_column("Started", style="blue")
+        table.add_column("Grade", style="green")
+
+        for att in info.attempts:
+            table.add_row(
+                att.number or "1",
+                att.id or "N/A",
+                att.status or "Unknown",
+                att.started or "Unknown",
+                att.grade or "N/A",
+            )
+        console.print(table)
+
+    if info.buttons:
+        console.print("\n[bold]Available Actions:[/bold]")
+        for btn in info.buttons:
+            label = btn.text.lower()
+            is_start = "start" in label or "kontynuuj" in label or "re-attempt" in label
+            style = "bold green" if is_start else "blue"
+            console.print(f" - [{style}]{btn.text}[/{style}]: [blue]{btn.url}[/blue]")
+
+        if any("start" in b.text.lower() for b in info.buttons):
+            console.print(
+                f"\n[yellow]Tip: Run [bold]put-esys quiz start {quiz_id}[/bold] "
+                "to start a new attempt.[/yellow]"
+            )
+        elif any(
+            "kontynuuj" in b.text.lower() or "continue" in b.text.lower() for b in info.buttons
+        ):
+            console.print(
+                f"\n[yellow]Tip: Run [bold]put-esys quiz attempt {quiz_id}[/bold] "
+                "to continue your attempt.[/yellow]"
+            )
+
+
+def display_quiz_attempt(info: QuizAttemptDetails) -> None:
+    """Renders details of a quiz attempt including all questions and answers."""
+    for q in info.questions:
+        q_header = f"\n[bold cyan]Question {q.number}[/bold cyan] ({q.type}, {q.state})"
+        console.print(q_header)
+
+        q_md_text = html_to_markdown(q.text)
+        a_md_text = html_to_markdown(q.answer)
+
+        console.print(Panel(Markdown(q_md_text), title="Question Text", border_style="blue"))
+        console.print(Panel(Markdown(a_md_text), title="Your Answer", border_style="green"))
+
+        if q.attachments:
+            att_list = "\n".join([f" - [{a.name}] ({a.url})" for a in q.attachments])
+            console.print(Panel(Markdown(att_list), title="Submitted Files", border_style="yellow"))
+        elif q.allows_attachments:
+            console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
+
+
+def display_emails_list(emails: list[EmailSummary]) -> None:
+    """Renders the list of email messages."""
+    table = Table(title="Recent Emails")
+    table.add_column("ID", style="cyan")
+    table.add_column("From", style="magenta")
+    table.add_column("Subject", style="green")
+    table.add_column("Date", style="blue")
+
+    for email in emails:
+        table.add_row(email.id, email.from_, email.subject, email.date)
+
+    console.print(table)
+
+
+def display_email_details(email_data: EmailDetails) -> None:
+    """Renders the content panel of a single email."""
+    console.print(
+        Panel(
+            email_data.body,
+            title=f"Subject: {email_data.subject}",
+            subtitle=f"From: {email_data.from_} | Date: {email_data.date}",
+        )
+    )
+
+    if email_data.attachments:
+        console.print("\n[bold]Attachments:[/bold]")
+        for att in email_data.attachments:
+            console.print(f" - {att}")
+        console.print(
+            f"\n[yellow]Tip: Run [bold]put-esys mail download {email_data.id} <filename>[/bold] "
+            "to download an attachment.[/yellow]"
+        )
