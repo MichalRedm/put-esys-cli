@@ -141,19 +141,41 @@ def mail_download(
 def mail_send(
     to: str = typer.Option(..., prompt="To", help="Recipient email address"),
     subject: str = typer.Option(..., prompt="Subject", help="Email subject"),
-    body: str = typer.Option(..., prompt="Body", help="Email body"),
+    body: Optional[str] = typer.Option(None, "--body", "-b", help="Email body"),
+    body_file: Optional[str] = typer.Option(
+        None, "--body-file", "-f", help="Path to file containing email body"
+    ),
     attach: Optional[List[str]] = typer.Option(
         None, "--attach", "-a", help="Path to file(s) to attach to the email"
     ),
 ):
     """Send an email."""
+    import os
     client = _get_mail_client()
     if not client:
         return
 
+    email_body = body
+    if body_file:
+        if body:
+            console.print("[red]Error: Cannot specify both --body and --body-file.[/red]")
+            return
+        if not os.path.exists(body_file):
+            console.print(f"[red]Error: Body file not found at '{body_file}'.[/red]")
+            return
+        try:
+            with open(body_file, "r", encoding="utf-8") as f:
+                email_body = f.read()
+        except Exception as e:
+            console.print(f"[red]Failed to read body file: {e}[/red]")
+            return
+
+    if email_body is None:
+        email_body = typer.prompt("Body")
+
     with console.status("[bold green]Sending email..."):
         try:
-            client.send_email(to, subject, body, attachment_paths=attach)
+            client.send_email(to, subject, email_body, attachment_paths=attach)
             console.print("[green]Email sent successfully.[/green]")
         except Exception as e:
             console.print(f"[red]Failed to send email: {e}[/red]")

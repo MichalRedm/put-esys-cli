@@ -42,7 +42,7 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys mail list [--limit N] [--search QUERY] [--folder FOLDER]`: List recent emails from a specific folder (defaults to INBOX), optionally filtered by a search query (e.g. subject or sender).
 - `put-esys mail read <MAIL_ID> [--folder FOLDER]`: Display the body and list of attachments of a specific email in a folder.
 - `put-esys mail download <MAIL_ID> <FILENAME> [--output OUTPUT_PATH] [--folder FOLDER]`: Download an attachment from a specific email in a folder.
-- `put-esys mail send [--attach FILE_PATH]`: Send an email (interactive prompts for recipient, subject, and body). Can attach files using multiple `--attach` flags.
+- `put-esys mail send [--body TEXT] [--body-file FILE_PATH] [--attach FILE_PATH]`: Send an email. The body can be provided as text, read from a file, or prompted interactively. Can attach files using multiple `--attach` flags.
 
 ### General
 - `put-esys save <URL> [--output FILENAME]`: Save a web page as an HTML file.
@@ -170,6 +170,11 @@ put-esys mail download 123 "report.pdf" --folder Sent --output downloads/report.
 ### Sending an email with attachments
 ```bash
 put-esys mail send --attach document.pdf --attach image.png
+```
+
+### Sending an email with a body file and attachments
+```bash
+put-esys mail send --to "recipient@example.com" --subject "Project Submission" --body-file "message.txt" --attach "report.pdf"
 ```
 
 ## Usage with Helper Scripts
