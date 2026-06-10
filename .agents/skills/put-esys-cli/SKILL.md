@@ -38,9 +38,10 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz submit <QUIZ_ID> [ATTEMPT_ID] [--force]`: Submit a quiz attempt to finalize it for grading. WARNING: This action is irreversible!
 
 ### Mail
-- `put-esys mail list [--limit N] [--search QUERY]`: List recent emails from your INBOX, optionally filtered by a search query (e.g. subject or sender).
-- `put-esys mail read <MAIL_ID>`: Display the body and list of attachments of a specific email.
-- `put-esys mail download <MAIL_ID> <FILENAME> [--output OUTPUT_PATH]`: Download an attachment from a specific email.
+- `put-esys mail folders`: List all available mail folders on the server.
+- `put-esys mail list [--limit N] [--search QUERY] [--folder FOLDER]`: List recent emails from a specific folder (defaults to INBOX), optionally filtered by a search query (e.g. subject or sender).
+- `put-esys mail read <MAIL_ID> [--folder FOLDER]`: Display the body and list of attachments of a specific email in a folder.
+- `put-esys mail download <MAIL_ID> <FILENAME> [--output OUTPUT_PATH] [--folder FOLDER]`: Download an attachment from a specific email in a folder.
 - `put-esys mail send [--attach FILE_PATH]`: Send an email (interactive prompts for recipient, subject, and body). Can attach files using multiple `--attach` flags.
 
 ### General
@@ -141,14 +142,29 @@ put-esys quiz download 2129129 2 my_document.pdf -o downloaded_document.pdf
 put-esys quiz submit 2129129
 ```
 
-### Searching emails
+### Listing mail folders
 ```bash
-put-esys mail list --search "Project Update"
+put-esys mail folders
 ```
 
-### Downloading an email attachment
+### Listing emails from Sent folder
 ```bash
-put-esys mail download 123 "report.pdf" --output downloads/report.pdf
+put-esys mail list --folder Sent
+```
+
+### Searching emails in Sent folder
+```bash
+put-esys mail list --folder Sent --search "Project Update"
+```
+
+### Reading a sent email
+```bash
+put-esys mail read 123 --folder Sent
+```
+
+### Downloading an email attachment from a sent email
+```bash
+put-esys mail download 123 "report.pdf" --folder Sent --output downloads/report.pdf
 ```
 
 ### Sending an email with attachments

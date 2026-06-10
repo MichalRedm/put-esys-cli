@@ -2,6 +2,7 @@ from typing import List, Optional
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from put_esys.cli.display import display_email_details, display_emails_list
 from put_esys.services.config import load_credentials
@@ -20,54 +21,87 @@ def _get_mail_client() -> Optional[MailClient]:
     return MailClient(creds["username"], creds["password"])
 
 
+@mail_app.command("folders")
+def mail_folders():
+    """List all available mail folders/mailboxes on the server."""
+    client = _get_mail_client()
+    if not client:
+        return
+
+    with console.status("[bold green]Fetching mail folders..."):
+        try:
+            folders = client.list_folders()
+        except Exception as e:
+            console.print(f"[red]Failed to list folders: {e}[/red]")
+            return
+
+    if not folders:
+        console.print("[yellow]No folders found.[/yellow]")
+        return
+
+    table = Table(title="Available Mail Folders")
+    table.add_column("Folder Name", style="cyan")
+    for folder in folders:
+        table.add_row(folder)
+    console.print(table)
+
+
 @mail_app.command("list")
 def mail_list(
     limit: int = typer.Option(10, help="Number of emails to list"),
     search: Optional[str] = typer.Option(
         None, "--search", "-s", help="Search query (e.g., sender or subject)"
     ),
+    folder: str = typer.Option(
+        "INBOX", "--folder", "-f", help="Mailbox folder to list from (e.g., INBOX, Sent)"
+    ),
 ):
-    """List recent emails from your INBOX, optionally filtered by a search query."""
+    """List recent emails from a specific folder, optionally filtered by a search query."""
     client = _get_mail_client()
     if not client:
         return
 
-    with console.status("[bold green]Fetching emails..."):
+    with console.status(f"[bold green]Fetching emails from {folder}..."):
         try:
-            emails = client.list_emails(limit=limit, search_query=search)
+            emails = client.list_emails(folder=folder, limit=limit, search_query=search)
         except Exception as e:
             console.print(f"[red]Failed to list emails: {e}[/red]")
             return
 
     if not emails:
         if search:
-            console.print(f"[yellow]No emails found matching '{search}'.[/yellow]")
+            console.print(f"[yellow]No emails found matching '{search}' in {folder}.[/yellow]")
         else:
-            console.print("[yellow]No emails found.[/yellow]")
+            console.print(f"[yellow]No emails found in {folder}.[/yellow]")
         return
 
-    display_emails_list(emails)
+    display_emails_list(emails, folder=folder)
 
 
 @mail_app.command("read")
-def mail_read(mail_id: str):
+def mail_read(
+    mail_id: str,
+    folder: str = typer.Option(
+        "INBOX", "--folder", "-f", help="Mailbox folder where the email is located"
+    ),
+):
     """Read a specific email by its ID."""
     client = _get_mail_client()
     if not client:
         return
 
-    with console.status(f"[bold green]Fetching email {mail_id}..."):
+    with console.status(f"[bold green]Fetching email {mail_id} from {folder}..."):
         try:
-            email_data = client.get_email_details(mail_id)
+            email_data = client.get_email_details(mail_id, folder=folder)
         except Exception as e:
             console.print(f"[red]Failed to fetch email: {e}[/red]")
             return
 
     if not email_data:
-        console.print(f"[red]Email with ID {mail_id} not found.[/red]")
+        console.print(f"[red]Email with ID {mail_id} not found in {folder}.[/red]")
         return
 
-    display_email_details(email_data)
+    display_email_details(email_data, folder=folder)
 
 
 @mail_app.command("download")
@@ -76,6 +110,9 @@ def mail_download(
     filename: str = typer.Argument(..., help="Name of the attachment to download"),
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output path for the downloaded attachment"
+    ),
+    folder: str = typer.Option(
+        "INBOX", "--folder", "-f", help="Mailbox folder where the email is located"
     ),
 ):
     """Download an attachment from a specific email."""
@@ -86,9 +123,9 @@ def mail_download(
     if not output:
         output = filename
 
-    with console.status(f"Downloading attachment '{filename}' from email {mail_id}..."):
+    with console.status(f"Downloading attachment '{filename}' from email {mail_id} in {folder}..."):
         try:
-            success = client.download_attachment(mail_id, filename, output)
+            success = client.download_attachment(mail_id, filename, output, folder=folder)
         except Exception as e:
             console.print(f"[red]Error downloading attachment: {e}[/red]")
             return

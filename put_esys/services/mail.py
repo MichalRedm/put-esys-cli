@@ -1,6 +1,7 @@
 import email
 import imaplib
 import os
+import re
 import smtplib
 from email import encoders
 from email.header import decode_header
@@ -25,6 +26,31 @@ class MailClient:
         mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
         mail.login(self.username, self.password)
         return mail
+
+    def list_folders(self) -> List[str]:
+        mail = self._connect_imap()
+        try:
+            status, folder_list = mail.list()
+            if status != "OK":
+                return []
+
+            folders = []
+            for folder_bytes in folder_list:
+                line = folder_bytes.decode("utf-8", errors="replace")
+                match = re.search(
+                    r"\((?P<flags>[^)]*)\)\s+(?P<delim>\"[^\"]+\"|[^\s]+)\s+(?P<name>.*)",
+                    line,
+                )
+                if match:
+                    name = match.group("name").strip()
+                    if name.startswith('"') and name.endswith('"'):
+                        name = name[1:-1]
+                    folders.append(name)
+                else:
+                    folders.append(line)
+            return folders
+        finally:
+            mail.logout()
 
     def list_emails(
         self, folder="INBOX", limit=10, search_query: Optional[str] = None
@@ -73,11 +99,21 @@ class MailClient:
                             except LookupError:
                                 from_ = from_.decode("utf-8", errors="replace")
 
+                        to_raw = decode_header(msg.get("To", ""))[0]
+                        to = to_raw[0]
+                        if isinstance(to, bytes):
+                            encoding = to_raw[1] or "utf-8"
+                            try:
+                                to = to.decode(encoding)
+                            except LookupError:
+                                to = to.decode("utf-8", errors="replace")
+
                         email_list.append(
                             EmailSummary(
                                 id=mail_id.decode(),
                                 subject=str(subject),
                                 from_=str(from_),
+                                to=str(to) if to else None,
                                 date=msg.get("Date"),
                             )
                         )
@@ -114,6 +150,15 @@ class MailClient:
                             from_ = from_.decode(encoding)
                         except LookupError:
                             from_ = from_.decode("utf-8", errors="replace")
+
+                    to_raw = decode_header(msg.get("To", ""))[0]
+                    to = to_raw[0]
+                    if isinstance(to, bytes):
+                        encoding = to_raw[1] or "utf-8"
+                        try:
+                            to = to.decode(encoding)
+                        except LookupError:
+                            to = to.decode("utf-8", errors="replace")
 
                     body = ""
                     attachments = []
@@ -160,6 +205,7 @@ class MailClient:
                         id=str(mail_id),
                         subject=str(subject),
                         from_=str(from_),
+                        to=str(to) if to else None,
                         date=msg.get("Date"),
                         body=body,
                         attachments=attachments,
