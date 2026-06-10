@@ -284,3 +284,12 @@ class MailClient:
         with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
             server.login(self.username, self.password)
             server.send_message(msg)
+
+        try:
+            mail = self._connect_imap()
+            try:
+                mail.append("Sent", None, None, msg.as_bytes())
+            finally:
+                mail.logout()
+        except Exception:
+            raise
