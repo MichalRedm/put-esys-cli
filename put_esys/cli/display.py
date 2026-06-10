@@ -185,27 +185,37 @@ def display_quiz_attempt(info: QuizAttemptDetails) -> None:
             console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
 
 
-def display_emails_list(emails: list[EmailSummary]) -> None:
+def display_emails_list(emails: list[EmailSummary], folder: str = "INBOX") -> None:
     """Renders the list of email messages."""
-    table = Table(title="Recent Emails")
+    title = f"Recent Emails ({folder})"
+    table = Table(title=title)
     table.add_column("ID", style="cyan")
-    table.add_column("From", style="magenta")
+    if "sent" in folder.lower():
+        table.add_column("To", style="magenta")
+    else:
+        table.add_column("From", style="magenta")
     table.add_column("Subject", style="green")
     table.add_column("Date", style="blue")
 
     for email in emails:
-        table.add_row(email.id, email.from_, email.subject, email.date)
+        recipient_or_sender = email.to if ("sent" in folder.lower() and email.to) else email.from_
+        table.add_row(email.id, recipient_or_sender, email.subject, email.date)
 
     console.print(table)
 
 
-def display_email_details(email_data: EmailDetails) -> None:
+def display_email_details(email_data: EmailDetails, folder: str = "INBOX") -> None:
     """Renders the content panel of a single email."""
+    subtitle = f"From: {email_data.from_}"
+    if email_data.to:
+        subtitle += f" | To: {email_data.to}"
+    subtitle += f" | Date: {email_data.date}"
+
     console.print(
         Panel(
             email_data.body,
             title=f"Subject: {email_data.subject}",
-            subtitle=f"From: {email_data.from_} | Date: {email_data.date}",
+            subtitle=subtitle,
         )
     )
 
@@ -213,7 +223,9 @@ def display_email_details(email_data: EmailDetails) -> None:
         console.print("\n[bold]Attachments:[/bold]")
         for att in email_data.attachments:
             console.print(f" - {att}")
+        
+        folder_option = f" --folder {folder}" if folder != "INBOX" else ""
         console.print(
-            f"\n[yellow]Tip: Run [bold]put-esys mail download {email_data.id} <filename>[/bold] "
-            "to download an attachment.[/yellow]"
+            f"\n[yellow]Tip: Run [bold]put-esys mail download {email_data.id} "
+            f"<filename>{folder_option}[/bold] to download an attachment.[/yellow]"
         )
