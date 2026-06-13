@@ -47,3 +47,9 @@ class QuizAttemptDetails(BaseModel):
     quiz_id: int
     attempt_id: int
     questions: List[Question]
+
+
+class QuizSearchResult(BaseModel):
+    id: str
+    name: str
+    url: str

@@ -5,7 +5,8 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from put_esys.cli.display import display_assignment
+from put_esys.cli.display import display_assignment, display_json
+from put_esys.cli.helpers import catch_errors, check_authenticated
 from put_esys.services.ekursy import AssignmentService, EKursyClient
 
 assignment_app = typer.Typer(help="Manage assignments")
@@ -18,33 +19,39 @@ def _extract_id(id_or_url: str) -> str:
         if match:
             return match.group(1)
         else:
-            console.print("[red]Could not parse assignment ID from URL.[/red]")
+            console.print("[red]Could not parse assignment ID from URL.[/red]", err=True)
             raise typer.Exit(code=1)
     return id_or_url
 
 
 @assignment_app.command("show")
-def assignment_show(id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL")):
+@catch_errors
+def assignment_show(
+    id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
+    json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+):
     """Show content and status of a specific assignment."""
     assign_id = _extract_id(id_or_url)
-    console.print(f"Fetching assignment [bold]{assign_id}[/bold]...")
+    if not json_format:
+        console.print(f"Fetching assignment [bold]{assign_id}[/bold]...", err=True)
 
     client = EKursyClient()
-    if not client.is_authenticated:
-        console.print("[red]Not authenticated.[/red]")
-        console.print("Please run [bold]put-esys config set[/bold] first.")
-        raise typer.Exit(code=1)
+    check_authenticated(client)
 
     service = AssignmentService(client.session)
     info, error = service.get_assignment_info(assign_id)
     if error:
-        console.print(f"[red]Error: {error}[/red]")
+        console.print(f"[red]Error: {error}[/red]", err=True)
         raise typer.Exit(code=1)
 
-    display_assignment(info)
+    if json_format:
+        display_json(info)
+    else:
+        display_assignment(info)
 
 
 @assignment_app.command("upload")
+@catch_errors
 def assignment_upload(
     id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
     file_path: str = typer.Argument(..., help="Path to the file to upload"),
@@ -54,9 +61,7 @@ def assignment_upload(
     assign_id = _extract_id(id_or_url)
 
     client = EKursyClient()
-    if not client.is_authenticated:
-        console.print("[red]Not authenticated.[/red]")
-        raise typer.Exit(code=1)
+    check_authenticated(client)
 
     console.print(f"Uploading [bold]{file_path}[/bold] to assignment [bold]{assign_id}[/bold]...")
     with console.status("[bold green]Saving assignment submission..."):
@@ -65,11 +70,12 @@ def assignment_upload(
             service.save_assignment_submission(assign_id, file_path=file_path, new_name=name)
             console.print("[bold green]Successfully saved assignment submission.[/bold green]")
         except Exception as e:
-            console.print(f"[red]Failed to upload file: {e}[/red]")
+            console.print(f"[red]Failed to upload file: {e}[/red]", err=True)
             raise typer.Exit(code=1)
 
 
 @assignment_app.command("edit")
+@catch_errors
 def assignment_edit(
     id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
     text: Optional[str] = typer.Option(None, "--text", "-t", help="New online text content"),
@@ -85,16 +91,15 @@ def assignment_edit(
     assign_id = _extract_id(id_or_url)
 
     client = EKursyClient()
-    if not client.is_authenticated:
-        console.print("[red]Not authenticated.[/red]")
-        raise typer.Exit(code=1)
+    check_authenticated(client)
 
     if text is None and file is None and attach is None and remove is None and rename is None:
-        console.print("[red]Error: You must provide at least one option to edit.[/red]")
+        console.print("[red]Error: You must provide at least one option to edit.[/red]", err=True)
         raise typer.Exit(1)
 
     if rename is not None and new_name is None:
-        console.print("[red]Error: You must provide --new-name when renaming a file.[/red]")
+        msg = "[red]Error: You must provide --new-name when renaming a file.[/red]"
+        console.print(msg, err=True)
         raise typer.Exit(1)
 
     with console.status(f"[bold green]Editing submission for Assignment {assign_id}..."):
@@ -114,26 +119,25 @@ def assignment_edit(
                 f"submission.[/bold green]"
             )
         except Exception as e:
-            console.print(f"[red]Failed to edit assignment: {e}[/red]")
+            console.print(f"[red]Failed to edit assignment: {e}[/red]", err=True)
             raise typer.Exit(code=1)
 
 
 @assignment_app.command("delete")
+@catch_errors
 def assignment_delete(
     id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Delete without asking for confirmation."
+    yes: bool = typer.Option(
+        False, "--yes", "-y", "--force", "-f", help="Delete without asking for confirmation."
     ),
 ):
     """Delete/remove the assignment submission."""
     assign_id = _extract_id(id_or_url)
 
     client = EKursyClient()
-    if not client.is_authenticated:
-        console.print("[red]Not authenticated.[/red]")
-        raise typer.Exit(code=1)
+    check_authenticated(client)
 
-    if not force:
+    if not yes:
         msg = (
             f"[bold red]WARNING:[/bold red] You are about to DELETE/REMOVE the submission "
             f"for [bold]Assignment {assign_id}[/bold].\n"
@@ -156,26 +160,25 @@ def assignment_delete(
                 f"submission.[/bold green]"
             )
         except Exception as e:
-            console.print(f"[red]Failed to delete assignment submission: {e}[/red]")
+            console.print(f"[red]Failed to delete assignment submission: {e}[/red]", err=True)
             raise typer.Exit(1)
 
 
 @assignment_app.command("submit")
+@catch_errors
 def assignment_submit(
     id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Submit without asking for confirmation."
+    yes: bool = typer.Option(
+        False, "--yes", "-y", "--force", "-f", help="Submit without asking for confirmation."
     ),
 ):
     """Finalize and submit the assignment submission. WARNING: This action is irreversible!"""
     assign_id = _extract_id(id_or_url)
 
     client = EKursyClient()
-    if not client.is_authenticated:
-        console.print("[red]Not authenticated.[/red]")
-        raise typer.Exit(code=1)
+    check_authenticated(client)
 
-    if not force:
+    if not yes:
         msg = (
             f"[bold red]WARNING:[/bold red] You are about to submit "
             f"[bold]Assignment {assign_id}[/bold].\n"
@@ -201,8 +204,8 @@ def assignment_submit(
                 if error:
                     console.print(f"[yellow]{error}[/yellow]")
             else:
-                console.print(f"[red]Failed to submit assignment: {error}[/red]")
+                console.print(f"[red]Failed to submit assignment: {error}[/red]", err=True)
                 raise typer.Exit(1)
         except Exception as e:
-            console.print(f"[red]Error submitting assignment: {e}[/red]")
+            console.print(f"[red]Error submitting assignment: {e}[/red]", err=True)
             raise typer.Exit(1)

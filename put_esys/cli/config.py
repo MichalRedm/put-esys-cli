@@ -37,8 +37,12 @@ def config_show():
 
 
 @config_app.command("delete")
-def config_delete():
+def config_delete(
+    yes: bool = typer.Option(
+        False, "--yes", "-y", "--force", "-f", help="Delete without asking for confirmation."
+    )
+):
     """Remove stored credentials."""
-    if typer.confirm("Are you sure you want to delete your stored credentials?"):
+    if yes or typer.confirm("Are you sure you want to delete your stored credentials?"):
         clear_credentials()
         console.print("[red]Credentials deleted.[/red]")

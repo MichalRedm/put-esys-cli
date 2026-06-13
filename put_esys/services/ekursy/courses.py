@@ -224,3 +224,31 @@ class CourseService:
                 sections.append(Section(name=section_name, activities=activities))
 
         return CourseContent(title=course_title, sections=sections), None
+
+    def resolve_course_id_by_name(
+        self, query: str
+    ) -> Tuple[Optional[str], Optional[List[Course]], Optional[str]]:
+        """
+        Resolves a course name query to a course ID by fetching enrolled courses and filtering.
+        Returns:
+            Tuple[Optional[str], Optional[List[Course]], Optional[str]]:
+            - resolved_id (str if single match, else None)
+            - matches (list of Course objects matching query)
+            - error (str if failure, else None)
+        """
+        courses, error = self.get_courses()
+        if error:
+            return None, None, error
+
+        if not courses:
+            return None, [], None
+
+        query_lower = query.lower()
+        matches = []
+        for course in courses:
+            if query_lower in course.title.lower() or query_lower in course.id:
+                matches.append(course)
+
+        if len(matches) == 1:
+            return matches[0].id, matches, None
+        return None, matches, None

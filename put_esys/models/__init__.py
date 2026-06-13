@@ -8,6 +8,7 @@ from .quiz import (
     QuizAttemptDetails,
     QuizAttemptSummary,
     QuizInfo,
+    QuizSearchResult,
 )
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "QuizActionButton",
     "QuizInfo",
     "QuizAttemptDetails",
+    "QuizSearchResult",
     "SubmittedFile",
     "AssignmentRow",
     "AssignmentInfo",

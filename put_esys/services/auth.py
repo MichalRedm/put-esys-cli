@@ -12,6 +12,10 @@ USER_AGENT = (
 )
 
 
+class SessionExpiredError(Exception):
+    pass
+
+
 class AuthError(Exception):
     pass
 
@@ -89,6 +93,20 @@ def get_authenticated_session() -> Optional[requests.Session]:
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT})
     session.cookies.update(cookies)
+
+    def check_session_hook(response, *args, **kwargs):
+        if "elogin.put.poznan.pl" in response.url or "login/index.php" in response.url:
+            raise SessionExpiredError(
+                "eKursy session expired. Please run 'put-esys login' to refresh your session."
+            )
+        content_type = response.headers.get("Content-Type", "")
+        if "text/html" in content_type or "application/xhtml+xml" in content_type:
+            if "Logowanie" in response.text and "login" in response.url:
+                raise SessionExpiredError(
+                    "eKursy session expired. Please run 'put-esys login' to refresh your session."
+                )
+
+    session.hooks["response"].append(check_session_hook)
     return session
 
 

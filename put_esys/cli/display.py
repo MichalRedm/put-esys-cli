@@ -1,3 +1,6 @@
+import json
+import sys
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -7,10 +10,25 @@ from rich.tree import Tree
 from put_esys.models.assignment import AssignmentInfo
 from put_esys.models.course import Course, CourseContent
 from put_esys.models.mail import EmailDetails, EmailSummary
-from put_esys.models.quiz import QuizAttemptDetails, QuizInfo
+from put_esys.models.quiz import QuizAttemptDetails, QuizInfo, QuizSearchResult
 from put_esys.utils.markdown import html_to_markdown
 
 console = Console()
+
+
+def display_json(data) -> None:
+    """Prints raw, untruncated JSON to stdout."""
+    if hasattr(data, "model_dump_json"):
+        sys.stdout.write(data.model_dump_json(indent=2) + "\n")
+    elif isinstance(data, list):
+        serialized = [
+            item.model_dump() if hasattr(item, "model_dump") else item for item in data
+        ]
+        sys.stdout.write(json.dumps(serialized, indent=2) + "\n")
+    elif hasattr(data, "model_dump"):
+        sys.stdout.write(json.dumps(data.model_dump(), indent=2) + "\n")
+    else:
+        sys.stdout.write(json.dumps(data, indent=2) + "\n")
 
 
 def get_activity_icon(activity_type: str) -> str:
@@ -233,3 +251,17 @@ def display_email_details(email_data: EmailDetails, folder: str = "INBOX") -> No
             f"\n[yellow]Tip: Run [bold]put-esys mail download {email_data.id} "
             f"<filename>{folder_option}[/bold] to download an attachment.[/yellow]"
         )
+
+
+def display_quiz_search_results(quizzes: list[QuizSearchResult]) -> None:
+    """Renders the quiz search results table."""
+    table = Table(title=f"Matched Quizzes ({len(quizzes)})")
+    table.add_column("#", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Quiz Name", style="magenta")
+    table.add_column("ID", style="yellow")
+    table.add_column("URL", style="blue")
+
+    for i, quiz in enumerate(quizzes, 1):
+        table.add_row(str(i), quiz.name, quiz.id, quiz.url)
+
+    console.print(table)

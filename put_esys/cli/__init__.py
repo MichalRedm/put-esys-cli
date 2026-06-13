@@ -8,6 +8,7 @@ import requests
 import typer
 from rich.console import Console
 
+from put_esys.cli.helpers import catch_errors, check_authenticated
 from put_esys.services.auth import authenticate
 from put_esys.services.config import load_credentials
 from put_esys.services.ekursy import EKursyClient
@@ -39,6 +40,7 @@ app.add_typer(assignment_app, name="assignment")
 
 
 @app.command()
+@catch_errors
 def login(
     username: Optional[str] = typer.Option(None, help="PUT username"),
     password: Optional[str] = typer.Option(None, help="PUT password", hide_input=True),
@@ -67,6 +69,7 @@ def login(
 
 
 @app.command()
+@catch_errors
 def save(
     url: str = typer.Argument(..., help="URL to save as HTML"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename"),
@@ -113,6 +116,7 @@ def save(
 
 
 @app.command()
+@catch_errors
 def download(
     url: str = typer.Argument(..., help="URL of the resource to download"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output filename"),
@@ -121,9 +125,7 @@ def download(
     console.print(f"Downloading [blue]{url}[/blue]...")
 
     client = EKursyClient()
-    if not client.is_authenticated:
-        console.print("[red]Not authenticated.[/red]")
-        raise typer.Exit(code=1)
+    check_authenticated(client)
 
     try:
         resp = client.download_resource(url)
