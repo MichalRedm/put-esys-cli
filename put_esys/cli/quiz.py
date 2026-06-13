@@ -6,12 +6,11 @@ from rich.console import Console
 from rich.panel import Panel
 
 from put_esys.cli.display import (
-    display_json,
     display_quiz_attempt,
     display_quiz_info,
     display_quiz_search_results,
 )
-from put_esys.cli.helpers import catch_errors, check_authenticated, is_numeric_or_url
+from put_esys.cli.helpers import catch_errors, check_authenticated, handle_output, is_numeric_or_url
 from put_esys.models.quiz import QuizSearchResult
 from put_esys.services.ekursy import CourseService, EKursyClient, QuizService
 
@@ -35,10 +34,11 @@ def _extract_id(id_or_url: str) -> str:
 def quiz_info(
     id_or_url: str = typer.Argument(..., help="Quiz ID or eKursy URL"),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """Show status and attempts for a specific quiz."""
     quiz_id = _extract_id(id_or_url)
-    if not json_format:
+    if not json_format and not output:
         console.print(f"Fetching info for quiz [bold]{quiz_id}[/bold]...", err=True)
 
     client = EKursyClient()
@@ -50,10 +50,7 @@ def quiz_info(
         console.print(f"[red]Error: {error}[/red]", err=True)
         raise typer.Exit(code=1)
 
-    if json_format:
-        display_json(info)
-    else:
-        display_quiz_info(info, quiz_id)
+    handle_output(info, output, json_format, display_quiz_info, quiz_id)
 
 
 @quiz_app.command("attempt")
@@ -62,9 +59,10 @@ def quiz_attempt(
     quiz_id: int,
     attempt_id: int = typer.Argument(None),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """View a particular quiz attempt (questions and answers)."""
-    if not json_format:
+    if not json_format and not output:
         if attempt_id:
             console.print(
                 f"Fetching attempt [bold]{attempt_id}[/bold] for quiz [bold]{quiz_id}[/bold]...",
@@ -80,7 +78,7 @@ def quiz_attempt(
     info, error = service.get_quiz_attempt(str(quiz_id), str(attempt_id) if attempt_id else None)
     if error:
         console.print(f"[red]Error: {error}[/red]", err=True)
-        if not json_format:
+        if not json_format and not output:
             console.print(
                 f"[yellow]Try running [bold]put-esys quiz start {quiz_id}[/bold] "
                 "to start a new attempt, "
@@ -89,10 +87,7 @@ def quiz_attempt(
             )
         raise typer.Exit(code=1)
 
-    if json_format:
-        display_json(info)
-    else:
-        display_quiz_attempt(info)
+    handle_output(info, output, json_format, display_quiz_attempt)
 
 
 @quiz_app.command("edit")
@@ -322,6 +317,7 @@ def quiz_search(
     query: str = typer.Argument(..., help="Quiz name query to search for"),
     course: str = typer.Option(..., "--course", "-c", help="Course ID, URL, or name query"),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """Search for quizzes in a course by name substring."""
     client = EKursyClient()
@@ -347,7 +343,7 @@ def quiz_search(
             raise typer.Exit(code=1)
 
         course_id = resolved_id
-        if not json_format:
+        if not json_format and not output:
             console.print(
                 f"Auto-resolved course '{course}' to ID {course_id} ({matches[0].title})",
                 err=True,
@@ -360,7 +356,7 @@ def quiz_search(
             console.print("[red]Could not parse course ID from URL.[/red]", err=True)
             raise typer.Exit(code=1)
 
-    if not json_format:
+    if not json_format and not output:
         console.print(f"Fetching quizzes in course [bold]{course_id}[/bold]...", err=True)
 
     content, error = course_service.get_course_content(course_id)
@@ -386,13 +382,187 @@ def quiz_search(
                         )
 
     if not matched_quizzes:
-        if json_format:
-            display_json([])
-        else:
+        handle_output([], output, json_format, None)
+        if not json_format and not output:
             console.print(f"[yellow]No quizzes found matching '{query}'.[/yellow]")
         return
 
-    if json_format:
-        display_json(matched_quizzes)
+    handle_output(matched_quizzes, output, json_format, display_quiz_search_results)
+
+
+@quiz_app.command("dump")
+@catch_errors
+def quiz_dump(
+    quiz_id: int,
+    attempt_id: Optional[int] = typer.Argument(
+        None,
+        help="Specific attempt ID. If omitted, the active/most recent attempt will be found.",
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file path for the Markdown dump"
+    ),
+):
+    """Dump a quiz attempt into a clean Markdown file template for offline editing."""
+    client = EKursyClient()
+    check_authenticated(client)
+
+    service = QuizService(client.session)
+    info, error = service.get_quiz_attempt(str(quiz_id), str(attempt_id) if attempt_id else None)
+    if error:
+        console.print(f"[red]Error: {error}[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    from put_esys.utils.markdown import html_to_markdown
+
+    lines = []
+    lines.append(f"# Quiz Attempt {info.attempt_id} (Quiz ID: {info.quiz_id})\n")
+
+    for q in info.questions:
+        lines.append(f"=== QUESTION {q.number} ===")
+        lines.append(f"Type: {q.type}")
+        lines.append(f"State: {q.state}\n")
+
+        q_text = html_to_markdown(q.text)
+        lines.append("## Question Text")
+        lines.append(q_text)
+        lines.append("")
+
+        a_text = html_to_markdown(q.answer)
+        lines.append("## Current Answer")
+        lines.append(a_text)
+        lines.append("")
+
+        if q.comment:
+            c_text = html_to_markdown(q.comment)
+            lines.append("## Teacher Comment")
+            lines.append(c_text)
+            lines.append("")
+
+        lines.append("")  # extra spacing
+
+    content = "\n".join(lines)
+
+    if not output:
+        output = f"quiz_{quiz_id}_attempt_{info.attempt_id}.md"
+
+    import os
+
+    parent = os.path.dirname(output)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    with open(output, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    console.print(f"[green]Successfully dumped quiz attempt to [bold]{output}[/bold][/green]")
+
+
+@quiz_app.command("sync")
+@catch_errors
+def quiz_sync(
+    quiz_id: int,
+    file: str = typer.Option(
+        ..., "--file", "-f", help="Path to the edited Markdown file to sync from"
+    ),
+):
+    """Sync/upload modified answers from a local Markdown file back to eKursy."""
+    import os
+
+    if not os.path.exists(file):
+        console.print(f"[red]Error: File not found at '{file}'[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    with open(file, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Parse attempt ID from header
+    attempt_id_match = re.search(r"Quiz Attempt (\d+)", content)
+    attempt_id = attempt_id_match.group(1) if attempt_id_match else None
+
+    # Parse questions from Markdown content
+    from put_esys.utils.markdown import html_to_markdown
+
+    parts = content.split("=== QUESTION ")
+    local_answers = {}
+    for part in parts[1:]:
+        lines = part.split("\n")
+        if not lines:
+            continue
+        number_line = lines[0]
+        q_no = number_line.replace("===", "").strip()
+        if not q_no.isdigit():
+            continue
+
+        # Extract current answer section
+        subparts = part.split("## Current Answer")
+        if len(subparts) > 1:
+            ans_content = subparts[1].strip()
+            comment_split = ans_content.split("## Teacher Comment")
+            ans_text = comment_split[0].strip()
+            local_answers[int(q_no)] = ans_text
+
+    if not local_answers:
+        console.print(
+            "[yellow]No questions parsed from the file. Check the format.[/yellow]", err=True
+        )
+        return
+
+    client = EKursyClient()
+    check_authenticated(client)
+    service = QuizService(client.session)
+
+    # If attempt_id is not in file, resolve active attempt
+    if not attempt_id:
+        with console.status("[bold green]Checking quiz attempts..."):
+            info, error = service.get_quiz_info(str(quiz_id))
+        if error:
+            console.print(f"[red]Error: {error}[/red]", err=True)
+            raise typer.Exit(1)
+        in_progress = [a for a in info.attempts if a.status in ["In progress", "W toku"]]
+        if in_progress and in_progress[0].id:
+            attempt_id = in_progress[0].id
+        else:
+            console.print(
+                "[red]No active (in progress) attempt found for this quiz.[/red]", err=True
+            )
+            raise typer.Exit(1)
+
+    # Fetch current attempt details from eKursy
+    with console.status("[bold green]Fetching current attempt details..."):
+        attempt_details, error = service.get_quiz_attempt(str(quiz_id), str(attempt_id))
+    if error:
+        console.print(f"[red]Error: {error}[/red]", err=True)
+        raise typer.Exit(1)
+
+    # Sync modified answers
+    synced_count = 0
+    for q in attempt_details.questions:
+        q_no = int(q.number)
+        if q_no in local_answers:
+            local_ans = local_answers[q_no]
+            # Convert current HTML answer from Moodle to Markdown to compare
+            current_ans_md = html_to_markdown(q.answer)
+            if local_ans != current_ans_md:
+                console.print(f"Detected modification in Question {q_no}.")
+                # Print preview of differences
+                console.print(f"  Old: {current_ans_md[:60]}...")
+                console.print(f"  New: {local_ans[:60]}...")
+                with console.status(f"[bold green]Saving answer for Question {q_no}..."):
+                    success = service.save_quiz_answer(
+                        quiz_id=str(quiz_id),
+                        attempt_id=str(attempt_id),
+                        question_number=q_no,
+                        new_text=local_ans,
+                    )
+                if success:
+                    console.print(f"[green]Successfully saved Question {q_no} answer.[/green]")
+                    synced_count += 1
+                else:
+                    console.print(f"[red]Failed to save Question {q_no} answer.[/red]", err=True)
+
+    if synced_count == 0:
+        console.print("[yellow]All answers match the server. No changes synced.[/yellow]")
     else:
-        display_quiz_search_results(matched_quizzes)
+        console.print(
+            f"[bold green]Successfully synced {synced_count} answers to eKursy.[/bold green]"
+        )

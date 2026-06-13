@@ -5,8 +5,8 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from put_esys.cli.display import display_assignment, display_json
-from put_esys.cli.helpers import catch_errors, check_authenticated
+from put_esys.cli.display import display_assignment
+from put_esys.cli.helpers import catch_errors, check_authenticated, handle_output
 from put_esys.services.ekursy import AssignmentService, EKursyClient
 
 assignment_app = typer.Typer(help="Manage assignments")
@@ -29,10 +29,11 @@ def _extract_id(id_or_url: str) -> str:
 def assignment_show(
     id_or_url: str = typer.Argument(..., help="Assignment ID or eKursy URL"),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """Show content and status of a specific assignment."""
     assign_id = _extract_id(id_or_url)
-    if not json_format:
+    if not json_format and not output:
         console.print(f"Fetching assignment [bold]{assign_id}[/bold]...", err=True)
 
     client = EKursyClient()
@@ -44,10 +45,7 @@ def assignment_show(
         console.print(f"[red]Error: {error}[/red]", err=True)
         raise typer.Exit(code=1)
 
-    if json_format:
-        display_json(info)
-    else:
-        display_assignment(info)
+    handle_output(info, output, json_format, display_assignment)
 
 
 @assignment_app.command("upload")

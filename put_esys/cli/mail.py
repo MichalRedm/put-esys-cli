@@ -4,8 +4,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from put_esys.cli.display import display_email_details, display_emails_list, display_json
-from put_esys.cli.helpers import catch_errors
+from put_esys.cli.display import display_email_details, display_emails_list
+from put_esys.cli.helpers import catch_errors, handle_output
 from put_esys.services.config import load_credentials
 from put_esys.services.mail import MailClient
 
@@ -26,13 +26,14 @@ def _get_mail_client() -> Optional[MailClient]:
 @catch_errors
 def mail_folders(
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """List all available mail folders/mailboxes on the server."""
     client = _get_mail_client()
     if not client:
         raise typer.Exit(code=1)
 
-    if not json_format:
+    if not json_format and not output:
         console.print("Fetching mail folders...", err=True)
 
     try:
@@ -42,20 +43,19 @@ def mail_folders(
         raise typer.Exit(code=1)
 
     if not folders:
-        if json_format:
-            display_json([])
-        else:
+        handle_output([], output, json_format, None)
+        if not json_format and not output:
             console.print("[yellow]No folders found.[/yellow]")
         return
 
-    if json_format:
-        display_json(folders)
-    else:
+    def display_folders(folders_list):
         table = Table(title="Available Mail Folders")
         table.add_column("Folder Name", style="cyan")
-        for folder in folders:
-            table.add_row(folder)
+        for f in folders_list:
+            table.add_row(f)
         console.print(table)
+
+    handle_output(folders, output, json_format, display_folders)
 
 
 @mail_app.command("list")
@@ -69,13 +69,14 @@ def mail_list(
         "INBOX", "--folder", "-f", help="Mailbox folder to list from (e.g., INBOX, Sent)"
     ),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """List recent emails from a specific folder, optionally filtered by a search query."""
     client = _get_mail_client()
     if not client:
         raise typer.Exit(code=1)
 
-    if not json_format:
+    if not json_format and not output:
         console.print(f"Fetching emails from {folder}...", err=True)
 
     try:
@@ -85,9 +86,8 @@ def mail_list(
         raise typer.Exit(code=1)
 
     if not emails:
-        if json_format:
-            display_json([])
-        else:
+        handle_output([], output, json_format, None)
+        if not json_format and not output:
             if search:
                 console.print(
                     f"[yellow]No emails found matching '{search}' in {folder}.[/yellow]"
@@ -96,10 +96,7 @@ def mail_list(
                 console.print(f"[yellow]No emails found in {folder}.[/yellow]")
         return
 
-    if json_format:
-        display_json(emails)
-    else:
-        display_emails_list(emails, folder=folder)
+    handle_output(emails, output, json_format, display_emails_list, folder=folder)
 
 
 @mail_app.command("read")
@@ -110,13 +107,14 @@ def mail_read(
         "INBOX", "--folder", "-f", help="Mailbox folder where the email is located"
     ),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """Read a specific email by its ID."""
     client = _get_mail_client()
     if not client:
         raise typer.Exit(code=1)
 
-    if not json_format:
+    if not json_format and not output:
         console.print(f"Fetching email {mail_id} from {folder}...", err=True)
 
     try:
@@ -129,10 +127,7 @@ def mail_read(
         console.print(f"[red]Email with ID {mail_id} not found in {folder}.[/red]", err=True)
         raise typer.Exit(code=1)
 
-    if json_format:
-        display_json(email_data)
-    else:
-        display_email_details(email_data, folder=folder)
+    handle_output(email_data, output, json_format, display_email_details, folder=folder)
 
 
 @mail_app.command("download")

@@ -1,10 +1,16 @@
 import re
+from typing import Optional
 
 import typer
 from rich.console import Console
 
-from put_esys.cli.display import display_course_content, display_courses_list, display_json
-from put_esys.cli.helpers import catch_errors, check_authenticated, is_numeric_or_url
+from put_esys.cli.display import display_course_content, display_courses_list
+from put_esys.cli.helpers import (
+    catch_errors,
+    check_authenticated,
+    handle_output,
+    is_numeric_or_url,
+)
 from put_esys.services.ekursy import CourseService, EKursyClient
 
 course_app = typer.Typer(help="Manage courses and content")
@@ -15,9 +21,10 @@ console = Console()
 @catch_errors
 def course_list(
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """List enrolled courses from eKursy."""
-    if not json_format:
+    if not json_format and not output:
         console.print("Fetching courses from eKursy...", err=True)
 
     client = EKursyClient()
@@ -30,16 +37,12 @@ def course_list(
         raise typer.Exit(code=1)
 
     if not courses:
-        if json_format:
-            display_json([])
-        else:
+        handle_output([], output, json_format, None)
+        if not json_format and not output:
             console.print("[yellow]No courses found or could not parse course list.[/yellow]")
         return
 
-    if json_format:
-        display_json(courses)
-    else:
-        display_courses_list(courses)
+    handle_output(courses, output, json_format, display_courses_list)
 
 
 @course_app.command("show")
@@ -47,6 +50,7 @@ def course_list(
 def course_show(
     id_or_url: str = typer.Argument(..., help="Course ID, URL, or course title query"),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """Show content of a specific course."""
     client = EKursyClient()
@@ -72,7 +76,7 @@ def course_show(
             raise typer.Exit(code=1)
 
         course_id = resolved_id
-        if not json_format:
+        if not json_format and not output:
             console.print(
                 f"Auto-resolved '{id_or_url}' to course ID {course_id} ({matches[0].title})",
                 err=True,
@@ -85,7 +89,7 @@ def course_show(
             console.print("[red]Could not parse course ID from URL.[/red]", err=True)
             raise typer.Exit(code=1)
 
-    if not json_format:
+    if not json_format and not output:
         console.print(f"Fetching content for course [bold]{course_id}[/bold]...", err=True)
 
     content, error = service.get_course_content(course_id)
@@ -93,10 +97,7 @@ def course_show(
         console.print(f"[red]Error: {error}[/red]", err=True)
         raise typer.Exit(code=1)
 
-    if json_format:
-        display_json(content)
-    else:
-        display_course_content(content)
+    handle_output(content, output, json_format, display_course_content)
 
 
 @course_app.command("search")
@@ -104,6 +105,7 @@ def course_show(
 def course_search(
     query: str = typer.Argument(..., help="Substring to search in course titles"),
     json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
 ):
     """Search enrolled courses by title substring or ID."""
     client = EKursyClient()
@@ -116,13 +118,9 @@ def course_search(
         raise typer.Exit(code=1)
 
     if not matches:
-        if json_format:
-            display_json([])
-        else:
+        handle_output([], output, json_format, None)
+        if not json_format and not output:
             console.print(f"[yellow]No courses found matching '{query}'.[/yellow]")
         return
 
-    if json_format:
-        display_json(matches)
-    else:
-        display_courses_list(matches)
+    handle_output(matches, output, json_format, display_courses_list)
