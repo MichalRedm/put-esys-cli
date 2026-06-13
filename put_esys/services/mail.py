@@ -261,14 +261,9 @@ class MailClient:
     def send_email(
         self, to_address, subject, body, attachment_paths: Optional[List[str]] = None
     ) -> None:
-        msg = MIMEMultipart()
-        msg["From"] = self.username
-        msg["To"] = to_address
-        msg["Subject"] = subject
-        msg["Date"] = email.utils.formatdate(localtime=True)
-        msg.attach(MIMEText(body, "plain"))
-
         if attachment_paths:
+            msg = MIMEMultipart()
+            msg.attach(MIMEText(body, "plain", "utf-8"))
             for filepath in attachment_paths:
                 if not os.path.isfile(filepath):
                     continue
@@ -283,6 +278,13 @@ class MailClient:
                     f'attachment; filename="{filename}"',
                 )
                 msg.attach(part)
+        else:
+            msg = MIMEText(body, "plain", "utf-8")
+
+        msg["From"] = self.username
+        msg["To"] = to_address
+        msg["Subject"] = subject
+        msg["Date"] = email.utils.formatdate(localtime=True)
 
         with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
             server.login(self.username, self.password)
