@@ -16,6 +16,7 @@ class Question(BaseModel):
     text: str  # HTML
     answer: str  # HTML
     attachments: List[Attachment]
+    comment: Optional[str] = None
 
 
 class QuizAttemptSummary(BaseModel):

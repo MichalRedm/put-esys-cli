@@ -330,6 +330,25 @@ class QuizService:
                     q_type = cls.replace("qtype_", "")
                     break
 
+            # Parse teacher comment
+            comment_html = None
+            comment_el = que_div.select_one(".comment")
+            if comment_el:
+                no_overflow = comment_el.select_one(".no-overflow")
+                if no_overflow:
+                    comment_html = str(no_overflow)
+                else:
+                    h4_el = comment_el.find("h4")
+                    h4_text = h4_el.get_text(strip=True) if h4_el else ""
+                    full_text = comment_el.get_text(strip=True)
+                    if h4_text and full_text.startswith(h4_text):
+                        text = full_text[len(h4_text):].strip()
+                    else:
+                        text = full_text.strip()
+                    text = re.sub(r'^(comment|komentarz):\s*', '', text, flags=re.IGNORECASE)
+                    if text:
+                        comment_html = f"<p>{text}</p>"
+
             questions.append(
                 Question(
                     number=q_no,
@@ -339,6 +358,7 @@ class QuizService:
                     text=q_text_html,
                     answer=answer_html,
                     attachments=attachments,
+                    comment=comment_html,
                 )
             )
 

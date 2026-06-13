@@ -184,6 +184,10 @@ def display_quiz_attempt(info: QuizAttemptDetails) -> None:
         elif q.allows_attachments:
             console.print("[italic yellow]No files submitted for this question.[/italic yellow]")
 
+        if q.comment:
+            c_md_text = html_to_markdown(q.comment)
+            console.print(Panel(Markdown(c_md_text), title="Teacher's Comment", border_style="red"))
+
 
 def display_emails_list(emails: list[EmailSummary], folder: str = "INBOX") -> None:
     """Renders the list of email messages."""
