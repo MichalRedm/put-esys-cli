@@ -1,8 +1,10 @@
 import email
+import email.utils
 import imaplib
 import os
 import re
 import smtplib
+import time
 from email import encoders
 from email.header import decode_header
 from email.mime.base import MIMEBase
@@ -263,6 +265,7 @@ class MailClient:
         msg["From"] = self.username
         msg["To"] = to_address
         msg["Subject"] = subject
+        msg["Date"] = email.utils.formatdate(localtime=True)
         msg.attach(MIMEText(body, "plain"))
 
         if attachment_paths:
@@ -288,7 +291,8 @@ class MailClient:
         try:
             mail = self._connect_imap()
             try:
-                mail.append("Sent", None, None, msg.as_bytes())
+                internal_date = imaplib.Time2Internaldate(time.time())
+                mail.append("Sent", None, internal_date, msg.as_bytes())
             finally:
                 mail.logout()
         except Exception:
