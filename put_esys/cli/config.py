@@ -9,10 +9,29 @@ console = Console()
 
 
 @config_app.command("set")
-def config_set():
-    """Set your PUT credentials."""
-    username = typer.prompt("PUT email (e.g. jan.kowalski@student.put.poznan.pl)")
-    password = typer.prompt("PUT password", hide_input=True)
+def config_set(
+    username: str = typer.Argument(
+        None,
+        help=(
+            "PUT email (e.g. jan.kowalski@student.put.poznan.pl). "
+            "If not provided, you will be prompted."
+        ),
+        show_default=False,
+    ),
+    password: str = typer.Argument(
+        None,
+        help="PUT password. If not provided, you will be prompted.",
+        show_default=False,
+    ),
+):
+    """Set your PUT credentials.
+
+    If username or password are not provided, you will be prompted interactively.
+    """
+    if not username:
+        username = typer.prompt("PUT email (e.g. jan.kowalski@student.put.poznan.pl)")
+    if not password:
+        password = typer.prompt("PUT password", hide_input=True)
     save_credentials(username, password)
     console.print("[green]Credentials saved successfully.[/green]")
 
