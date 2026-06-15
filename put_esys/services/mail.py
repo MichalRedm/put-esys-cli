@@ -216,7 +216,9 @@ class MailClient:
         finally:
             mail.logout()
 
-    def download_attachment(self, mail_id, filename, output_path, folder="INBOX") -> bool:
+    def download_attachment(
+        self, mail_id, filename, output_path, folder="INBOX", index: Optional[int] = None
+    ) -> bool:
         mail = self._connect_imap()
         try:
             mail.select(folder)
@@ -230,6 +232,7 @@ class MailClient:
                     if not msg.is_multipart():
                         return False
 
+                    match_count = 0
                     for part in msg.walk():
                         content_disposition = str(part.get("Content-Disposition"))
                         is_attach = "attachment" in content_disposition or (
@@ -249,11 +252,20 @@ class MailClient:
                                         fname = fname.decode("utf-8", errors="replace")
 
                                 if str(fname) == filename:
-                                    payload = part.get_payload(decode=True)
-                                    if payload:
-                                        with open(output_path, "wb") as f:
-                                            f.write(payload)
-                                        return True
+                                    match_count += 1
+                                    if index is not None:
+                                        if match_count == index:
+                                            payload = part.get_payload(decode=True)
+                                            if payload:
+                                                with open(output_path, "wb") as f:
+                                                    f.write(payload)
+                                                return True
+                                    else:
+                                        payload = part.get_payload(decode=True)
+                                        if payload:
+                                            with open(output_path, "wb") as f:
+                                                f.write(payload)
+                                            return True
             return False
         finally:
             mail.logout()

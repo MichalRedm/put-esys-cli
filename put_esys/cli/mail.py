@@ -141,6 +141,12 @@ def mail_download(
     folder: str = typer.Option(
         "INBOX", "--folder", "-f", help="Mailbox folder where the email is located"
     ),
+    index: Optional[int] = typer.Option(
+        None,
+        "--index",
+        "-i",
+        help="1-based index of the attachment if there are duplicate filenames",
+    ),
 ):
     """Download an attachment from a specific email."""
     client = _get_mail_client()
@@ -150,9 +156,53 @@ def mail_download(
     if not output:
         output = filename
 
-    console.print(f"Downloading attachment '{filename}' from email {mail_id} in {folder}...")
+    # Pre-check duplicates and validate index
     try:
-        success = client.download_attachment(mail_id, filename, output, folder=folder)
+        email_data = client.get_email_details(mail_id, folder=folder)
+    except Exception as e:
+        console.print(f"[red]Error fetching email details: {e}[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    if not email_data:
+        console.print(f"[red]Email with ID {mail_id} not found in {folder}.[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    matches = [name for name in email_data.attachments if name == filename]
+    if not matches:
+        console.print(f"[red]Attachment '{filename}' not found in the email.[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    if len(matches) > 1:
+        if index is None:
+            console.print(
+                f"[yellow]Warning: Found {len(matches)} attachments named '{filename}'.\n"
+                "Defaulting to the first one (index 1). "
+                "Use --index / -i to specify another.[/yellow]",
+                err=True,
+            )
+            index = 1
+        elif index < 1 or index > len(matches):
+            console.print(
+                f"[red]Error: Invalid index {index}. "
+                f"Only {len(matches)} attachments found with name '{filename}'.[/red]",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+    else:
+        if index is not None and index != 1:
+            console.print(
+                f"[red]Error: Invalid index {index}. "
+                f"Only 1 attachment found with name '{filename}'.[/red]",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+    console.print(
+        f"Downloading attachment '{filename}' (index {index or 1}) "
+        f"from email {mail_id} in {folder}..."
+    )
+    try:
+        success = client.download_attachment(mail_id, filename, output, folder=folder, index=index)
     except Exception as e:
         console.print(f"[red]Error downloading attachment: {e}[/red]", err=True)
         raise typer.Exit(code=1)
@@ -160,7 +210,7 @@ def mail_download(
     if success:
         console.print(f"[green]Successfully downloaded attachment to [bold]{output}[/bold][/green]")
     else:
-        msg = f"[red]Failed to download attachment '{filename}'. Does it exist in the email?[/red]"
+        msg = f"[red]Failed to download attachment '{filename}'.[/red]"
         console.print(msg, err=True)
         raise typer.Exit(code=1)
 
