@@ -1,9 +1,45 @@
 name: "put-esys-cli"
-version: "1.0"
-description: "A CLI tool for accessing electronic systems of Poznań University of Technology."
+version: "2.0"
+description: "A CLI tool and scraping client for Poznań University of Technology (PUT) electronic systems."
+entrypoint: "../AGENTS.md"
 layers:
-  rules: "./rules"
-  context: "./context"
+  rules:
+    - path: "./rules/cli_standards.md"
+      description: "CLI command conventions, rich vs json output, UTF-8 output flags, and non-interactive execution."
+      trigger_paths:
+        - "put_esys/cli/**"
+        - "put_esys/main.py"
+    - path: "./rules/scraping_and_auth_standards.md"
+      description: "PUT eLogin SSO auto-redirect chaining, session persistence, BeautifulSoup scraping, and Moodle draft uploads."
+      trigger_paths:
+        - "put_esys/services/**"
+    - path: "./rules/ci_standards.md"
+      description: "Local CI validation equivalents and Ruff linting protocols."
+      trigger_paths:
+        - ".github/workflows/**"
+        - "pyproject.toml"
+    - path: "./rules/agent_maintenance_standards.md"
+      description: "Autonomous self-maintenance triggers and procedure."
+      trigger_paths:
+        - ".agents/**"
+  context:
+    - path: "./context/architecture.md"
+      description: "Layered architecture, Pydantic schemas, and execution flow."
+      trigger_paths:
+        - "put_esys/models/**"
+        - "put_esys/services/**"
+        - "put_esys/cli/**"
+    - path: "./context/put_systems.md"
+      description: "Target PUT systems specification: eLogin SSO, eKursy (Moodle), and student mail protocols."
+      trigger_paths:
+        - "put_esys/services/auth.py"
+        - "put_esys/services/ekursy/**"
+        - "put_esys/services/mail.py"
+  skills:
+    - path: "./skills/put-esys-cli/SKILL.md"
+      description: "Operational CLI user and agent scripting guide."
+    - path: "./skills/agent-maintenance/SKILL.md"
+      description: "Autonomous .agents/ context maintenance workflow."
 metadata:
   primary_agent: "Antigravity"
-  objective: "Develop a robust CLI utility for authenticating and scraping PUT electronic systems like eKursy."
+  objective: "Maintain and extend put-esys CLI with robust PUT systems scraping, mail support, and agentic workflows."
