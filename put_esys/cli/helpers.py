@@ -29,12 +29,16 @@ def catch_errors(f):
     def wrapper(*args, **kwargs):
         try:
             return f(*args, **kwargs)
+        except typer.Exit:
+            raise
         except SessionExpiredError as e:
+
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(code=1)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(code=1)
+
 
     return wrapper
 

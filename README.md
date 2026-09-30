@@ -71,10 +71,34 @@ List all your enrolled courses:
 put-esys course list
 ```
 
+Search enrolled courses (or all courses via `--all`):
+```bash
+put-esys course search "Machine Learning"
+put-esys course search --all "Information Theory"
+```
+
+Browse course categories (faculties, degrees, semesters):
+```bash
+put-esys course categories
+put-esys course categories 4      # WIiT
+put-esys course categories 3160   # II Semestr [WIiT-SI-st-II] (Semestr 9)
+```
+
+Search global course catalog across all categories:
+```bash
+put-esys course find "Quantum"
+```
+
+Self-enrol into a course (with optional enrolment key):
+```bash
+put-esys course enrol 35839 --key "secret_key"
+```
+
 Show content of a specific course:
 ```bash
 put-esys course show <course_id_or_url>
 ```
+
 
 ### Quizzes
 View quiz information and status:

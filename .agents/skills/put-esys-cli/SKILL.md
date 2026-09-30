@@ -26,7 +26,11 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 ### eKursy
 - `put-esys course list [--json] [-o/--output PATH]`: List enrolled courses from eKursy.
 - `put-esys course show <ID_OR_URL_OR_NAME> [--json] [-o/--output PATH]`: Display the content (sections and activities) of a specific course. Supports course title substring resolution.
-- `put-esys course search <QUERY> [--json] [-o/--output PATH]`: Search enrolled courses by name substring or ID.
+- `put-esys course search <QUERY> [--all] [--json] [-o/--output PATH]`: Search enrolled courses by name substring or ID (use `--all` to search all courses globally).
+- `put-esys course find <QUERY> [--json] [-o/--output PATH]`: Search global eKursy course catalog across all categories.
+- `put-esys course categories [CATEGORY_ID] [--json] [-o/--output PATH]`: Browse course categories and discover courses inside a category (e.g. `put-esys course categories 3160` for Semestr 9).
+- `put-esys course enrol <ID_OR_NAME> [--key KEY] [-y/--yes] [--json] [-o/--output PATH]`: Self-enrol into a course, providing an enrolment key if required.
+
 - `put-esys assignment show <ID_OR_URL> [--json] [-o/--output PATH]`: Show content and status of a specific assignment.
 - `put-esys assignment upload <ID_OR_URL> <FILE_PATH> [--name NEW_NAME]`: Upload a file to an assignment (optionally under a custom name via `--name`) and save the submission changes.
 - `put-esys assignment submit <ID_OR_URL> [-y/--yes]`: Finalize and submit the assignment submission. WARNING: This action is irreversible!
@@ -75,10 +79,27 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 put-esys course list --json -o scratch/courses.json
 ```
 
+### Browsing categories and discovering courses (ENCOURAGED)
+```bash
+# Browse WIiT AI Master's Semester 2 / Semestr 9 courses
+put-esys course categories 3160 --json -o scratch/sem9_courses.json
+```
+
+### Finding courses globally in eKursy catalog (ENCOURAGED)
+```bash
+put-esys course find "Quantum" --json -o scratch/search_quantum.json
+```
+
+### Self-enrolling into a course with an enrolment key (ENCOURAGED)
+```bash
+put-esys course enrol 35839 --key "course_key" --yes --json -o scratch/enrol_result.json
+```
+
 ### Viewing course content by Name Resolution to file (ENCOURAGED)
 ```bash
 put-esys course show "Biologically-inspired" -o scratch/course_structure.txt
 ```
+
 
 ### Searching for a quiz by Name Substring to JSON file (ENCOURAGED)
 ```bash

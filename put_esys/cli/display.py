@@ -8,7 +8,12 @@ from rich.table import Table
 from rich.tree import Tree
 
 from put_esys.models.assignment import AssignmentInfo
-from put_esys.models.course import Course, CourseContent
+from put_esys.models.course import (
+    CategoryBrowseResult,
+    Course,
+    CourseContent,
+    DiscoveredCourse,
+)
 from put_esys.models.mail import EmailDetails, EmailSummary
 from put_esys.models.quiz import QuizAttemptDetails, QuizInfo, QuizSearchResult
 from put_esys.utils.markdown import html_to_markdown
@@ -265,3 +270,100 @@ def display_quiz_search_results(quizzes: list[QuizSearchResult]) -> None:
         table.add_row(str(i), quiz.name, quiz.id, quiz.url)
 
     console.print(table)
+
+
+def display_categories(result: CategoryBrowseResult) -> None:
+    """Renders the course category hierarchy and contained courses."""
+    if result.current_category:
+        cat_text = (
+            f"[bold cyan]{result.current_category.name}[/bold cyan] "
+            f"(ID: {result.current_category.id})"
+        )
+        console.print(
+            Panel(
+                cat_text,
+                title="Current Category",
+                border_style="cyan",
+            )
+        )
+
+
+    if result.subcategories:
+        table = Table(title=f"Subcategories ({len(result.subcategories)})")
+        table.add_column("#", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Category Name", style="magenta")
+        table.add_column("ID", style="yellow")
+        table.add_column("Browse Command", style="blue")
+
+        for i, cat in enumerate(result.subcategories, 1):
+            cmd = f"put-esys course categories {cat.id}"
+            table.add_row(str(i), cat.name, cat.id, cmd)
+
+        console.print(table)
+
+    if result.courses:
+        table = Table(title=f"Courses in Category ({len(result.courses)})")
+        table.add_column("#", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Course Title", style="magenta")
+        table.add_column("ID", style="yellow")
+        table.add_column("Key?", justify="center")
+        table.add_column("Action", style="blue")
+
+        for i, course in enumerate(result.courses, 1):
+            key_badge = (
+                "[bold yellow]Yes (Key)[/bold yellow]"
+                if course.requires_key
+                else "[green]No (Open)[/green]"
+            )
+            action = f"put-esys course enrol {course.id}"
+            table.add_row(str(i), course.title, course.id, key_badge, action)
+
+        console.print(table)
+
+    if not result.subcategories and not result.courses:
+        console.print("[yellow]No subcategories or courses found in this category.[/yellow]")
+
+
+def display_discovered_courses(courses: list[DiscoveredCourse]) -> None:
+    """Renders the global course search results table."""
+    table = Table(title=f"Discovered Courses ({len(courses)})")
+    table.add_column("#", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Course Title", style="magenta")
+    table.add_column("ID", style="yellow")
+    table.add_column("Category", style="cyan")
+    table.add_column("Key?", justify="center")
+    table.add_column("Action", style="blue")
+
+    for i, course in enumerate(courses, 1):
+        key_badge = (
+            "[bold yellow]Yes (Key)[/bold yellow]"
+            if course.requires_key
+            else "[green]No (Open)[/green]"
+        )
+        cat = course.category_name or "-"
+        action = f"put-esys course enrol {course.id}"
+        table.add_row(str(i), course.title, course.id, cat, key_badge, action)
+
+    console.print(table)
+
+
+def display_enrolment_result(course_id: str, success: bool, message: str) -> None:
+    """Renders the course enrolment result panel."""
+    if success:
+        console.print(
+            Panel(
+                f"[bold green]{message}[/bold green]\nCourse ID: {course_id}\n"
+                f"Course URL: [blue]https://ekursy.put.poznan.pl/course/view.php?id={course_id}[/blue]",
+                title="Course Enrolment",
+                border_style="green",
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"[bold red]{message}[/bold red]\nCourse ID: {course_id}",
+                title="Course Enrolment Failed",
+                border_style="red",
+            )
+        )
+

@@ -47,7 +47,7 @@ flowchart TD
 
 ### 1. Presentation Layer (`put_esys/cli/`)
 - `__init__.py`: Primary Typer app instance, sets up sub-commands and top-level commands (`login`, `save`, `download`).
-- `course.py`: Commands for listing courses, searching, and viewing course hierarchy.
+- `course.py`: Commands for listing enrolled courses, searching (`--all`), browsing categories, global search (`find`), self-enrolling (`enrol`), and viewing course hierarchy.
 - `assignment.py`: Commands for inspecting assignments, uploading files, modifying submissions, and final submission.
 - `quiz.py`: Commands for inspecting quizzes, dumping attempts to Markdown templates, syncing edited answers, and submitting.
 - `mail.py`: Commands for mailbox listing, search, reading emails, downloading attachments, and sending.
@@ -60,13 +60,14 @@ flowchart TD
 - `config.py`: Secure storage and retrieval of credentials and session cookies via `appdirs`.
 - `mail.py`: IMAP4_SSL and SMTP_SSL client for reading and sending university student mail.
 - `ekursy/client.py`: Base client managing the authenticated `requests.Session` and landing page redirects.
-- `ekursy/courses.py`: Scrapes course enrollment lists and course sections/activities.
+- `ekursy/courses.py`: Scrapes course enrollment lists, course sections/activities, browses Moodle categories (`course/index.php`), performs global course catalog search (`course/search.php`), and executes course self-enrolment (`enrol/index.php`).
 - `ekursy/assignments.py`: Scrapes assignment details, handles Moodle draft file uploads, and manages submission states.
 - `ekursy/quizzes.py`: Manages quiz attempts, questions, question types (multichoice, essay), and offline Markdown synchronization.
 - `ekursy/draft_files.py`: Moodle file picker interaction and draft item ID generation.
 
 ### 3. Models Layer (`put_esys/models/`)
-- `course.py`: `Course`, `Section`, `Activity` models.
+- `course.py`: `Course`, `CourseCategory`, `DiscoveredCourse`, `CategoryBrowseResult`, `EnrolmentInfo`, `EnrolmentStatus`, `Section`, `Activity` models.
+
 - `assignment.py`: `Assignment`, `AssignmentSubmission`, `SubmissionFile` models.
 - `quiz.py`: `QuizInfo`, `QuizAttempt`, `QuizQuestion`, `QuestionOption` models.
 - `mail.py`: `MailMessage`, `MailFolder`, `MailAttachment` models.

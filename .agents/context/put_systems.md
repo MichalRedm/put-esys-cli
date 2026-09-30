@@ -42,11 +42,25 @@ eKursy (`https://ekursy.put.poznan.pl/`) is the university's Moodle-based Learni
 | Component | URL Pattern | Description |
 | :--- | :--- | :--- |
 | **Course View** | `https://ekursy.put.poznan.pl/course/view.php?id=<id>` | Sections, resource links, activities |
+| **Course Categories** | `https://ekursy.put.poznan.pl/course/index.php?categoryid=<id>` | Hierarchy of faculties, programs, and semesters |
+| **Course Search** | `https://ekursy.put.poznan.pl/course/search.php?search=<query>` | Global course search across all categories |
+| **Course Enrolment** | `https://ekursy.put.poznan.pl/enrol/index.php?id=<id>` | Self-enrolment landing page and password form |
 | **Assignment View** | `https://ekursy.put.poznan.pl/mod/assign/view.php?id=<id>` | Status, due date, submission files |
 | **Assignment Edit** | `https://ekursy.put.poznan.pl/mod/assign/view.php?id=<id>&action=editsubmission` | File upload form and text area |
 | **Quiz View** | `https://ekursy.put.poznan.pl/mod/quiz/view.php?id=<id>` | Attempts, status, timing rules |
 | **Quiz Attempt** | `https://ekursy.put.poznan.pl/mod/quiz/attempt.php?attempt=<id>` | Questions, answer inputs, submission controls |
 | **Resource Download** | `https://ekursy.put.poznan.pl/mod/resource/view.php?id=<id>` | Direct link or landing page to `pluginfile.php` |
+
+### Course Self-Enrolment Protocol (`enrol/index.php`)
+1. Visiting `course/view.php?id=<id>` while unenrolled redirects to `enrol/index.php?id=<id>`.
+2. The page inspects whether self-enrolment is allowed. If disabled, a warning notification is displayed.
+3. If self-enrolment is enabled, the form exposes:
+   - `id`: Target course ID
+   - `instance`: Enrolment plugin instance ID
+   - `sesskey`: Session token
+   - `enrolpassword`: Enrolment key/password (if required)
+4. POSTing this payload to `enrol/index.php` enrolls the user and redirects to `course/view.php?id=<id>`. If the password is invalid, Moodle returns HTTP 200 with an `.alert-danger` / `.error` element.
+
 
 ### Moodle File Upload Protocol (`draftfiles.php`)
 1. Accessing the assignment edit page exposes a hidden input: `files_filemanager` containing a numeric `draftitemid`.
