@@ -526,19 +526,23 @@ class CourseService:
         self, course_id: str
     ) -> Tuple[Optional[EnrolmentInfo], Optional[str]]:
         """Inspect course enrolment options and prerequisites."""
-        url = f"https://ekursy.put.poznan.pl/enrol/index.php?id={course_id}"
+        url = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}"
         try:
             resp = self.session.get(url, timeout=30)
             resp.raise_for_status()
         except Exception as e:
-            return None, f"Failed to access enrolment page: {e}"
+            return None, f"Failed to access course page: {e}"
 
+        soup = BeautifulSoup(resp.text, "html.parser")
         if "course/view.php" in resp.url:
+            h1 = soup.find("h1")
+            course_title = h1.get_text(strip=True) if h1 else f"Course {course_id}"
             return EnrolmentInfo(
                 course_id=course_id,
-                course_title="Course",
+                course_title=course_title,
                 status=EnrolmentStatus.ALREADY_ENROLLED,
             ), None
+
 
         soup = BeautifulSoup(resp.text, "html.parser")
         main_region = soup.select_one("#region-main") or soup.find("div", role="main") or soup
@@ -626,15 +630,16 @@ class CourseService:
         self, course_id: str, password: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
         """Submit self-enrolment into a course with optional enrolment key."""
-        url = f"https://ekursy.put.poznan.pl/enrol/index.php?id={course_id}"
+        url = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}"
         try:
             resp = self.session.get(url, timeout=30)
             resp.raise_for_status()
         except Exception as e:
-            return False, f"Failed to access enrolment page: {e}"
+            return False, f"Failed to access course page: {e}"
 
         if "course/view.php" in resp.url:
             return True, "Already enrolled in this course."
+
 
         soup = BeautifulSoup(resp.text, "html.parser")
         main_region = soup.select_one("#region-main") or soup.find("div", role="main") or soup
