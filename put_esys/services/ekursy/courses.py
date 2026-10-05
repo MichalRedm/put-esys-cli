@@ -1,7 +1,5 @@
-import os
 import re
 from typing import List, Optional, Tuple
-from urllib.parse import quote_plus, unquote, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -10,7 +8,6 @@ from put_esys.models.course import (
     Activity,
     CategoryBrowseResult,
     Course,
-    CourseCategory,
     CourseContent,
     DiscoveredCourse,
     DownloadedResource,
@@ -18,18 +15,26 @@ from put_esys.models.course import (
     EnrolmentStatus,
     Section,
 )
+from put_esys.services.ekursy.discovery import CourseDiscoveryService
+from put_esys.services.ekursy.downloader import CourseDownloaderService
+from put_esys.services.ekursy.enrolment import CourseEnrolmentService
+from put_esys.services.ekursy.notes import CourseNotesExporter
+from put_esys.utils.http import extract_filename_from_response
 from put_esys.utils.markdown import html_to_markdown
 
 
 class CourseService:
     def __init__(self, session: requests.Session):
         self.session = session
+        self.discovery = CourseDiscoveryService(session)
+        self.enrolment = CourseEnrolmentService(session)
+        self.downloader = CourseDownloaderService(session)
 
     def get_courses(self) -> Tuple[Optional[List[Course]], Optional[str]]:
         """List enrolled courses from eKursy."""
         # 1. Get dashboard to find user ID
         try:
-            resp = self.session.get("https://ekursy.put.poznan.pl/")
+            resp = self.session.get("https://ekursy.put.poznan.pl/", timeout=30)
             resp.raise_for_status()
         except Exception as e:
             return None, f"Failed to access eKursy dashboard: {e}"
@@ -60,7 +65,7 @@ class CourseService:
         # 2. Navigate to Profile page with all courses shown
         profile_url = f"https://ekursy.put.poznan.pl/user/profile.php?id={user_id}&showallcourses=1"
         try:
-            resp = self.session.get(profile_url)
+            resp = self.session.get(profile_url, timeout=30)
             resp.raise_for_status()
         except Exception as e:
             return None, f"Failed to access eKursy profile: {e}"
@@ -109,7 +114,7 @@ class CourseService:
         # Strategy C: Navigation menu (Dashboard fallback)
         if not courses:
             try:
-                dashboard_resp = self.session.get("https://ekursy.put.poznan.pl/")
+                dashboard_resp = self.session.get("https://ekursy.put.poznan.pl/", timeout=30)
                 dashboard_soup = BeautifulSoup(dashboard_resp.text, "html.parser")
                 nav_links = dashboard_soup.find_all(
                     "a", href=re.compile(r"course/view.php\?id=(\d+)")
@@ -163,10 +168,8 @@ class CourseService:
                     "Please contact the course instructor for access."
                 )
 
-
         soup = BeautifulSoup(resp.text, "html.parser")
         course_title = soup.find("h1").get_text(strip=True) if soup.find("h1") else "Unknown Course"
-
 
         sections = []
         for section_li in soup.select("li.section"):
@@ -291,535 +294,44 @@ class CourseService:
 
         return CourseContent(title=course_title, sections=sections), None
 
+    # Facade delegation methods for backward compatibility
     def resolve_course_id_by_name(
         self, query: str
     ) -> Tuple[Optional[str], Optional[List[Course]], Optional[str]]:
-        """
-        Resolves a course name query to a course ID by fetching enrolled courses and filtering.
-        Returns:
-            Tuple[Optional[str], Optional[List[Course]], Optional[str]]:
-            - resolved_id (str if single match, else None)
-            - matches (list of Course objects matching query)
-            - error (str if failure, else None)
-        """
         courses, error = self.get_courses()
         if error:
             return None, None, error
-
-        if not courses:
-            return None, [], None
-
-        query_lower = query.lower()
-        matches = []
-        for course in courses:
-            if query_lower in course.title.lower() or query_lower in course.id:
-                matches.append(course)
-
-        if len(matches) == 1:
-            return matches[0].id, matches, None
-        return None, matches, None
+        resolved_id, matches = self.discovery.resolve_course_id_by_name(courses or [], query)
+        return resolved_id, matches, None
 
     def get_categories(
         self, category_id: Optional[str] = None
     ) -> Tuple[Optional[CategoryBrowseResult], Optional[str]]:
-        """Browse course categories and courses within a category."""
-        if category_id:
-            url = f"https://ekursy.put.poznan.pl/course/index.php?categoryid={category_id}"
-        else:
-            url = "https://ekursy.put.poznan.pl/course/index.php"
-
-        try:
-            resp = self.session.get(url, timeout=30)
-            resp.raise_for_status()
-        except Exception as e:
-            return None, f"Failed to access course categories: {e}"
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        main_region = soup.select_one("#region-main") or soup.find("div", role="main") or soup
-
-        # 1. Identify current category (if any)
-        current_category = None
-        if category_id:
-            header_el = (
-                main_region.select_one(".page-header-headings h1")
-                or main_region.select_one("h2")
-                or soup.select_one("h1")
-            )
-            cat_name = header_el.get_text(strip=True) if header_el else f"Category {category_id}"
-            current_category = CourseCategory(
-                id=category_id,
-                name=cat_name,
-                url=url,
-            )
-
-        # 2. Extract subcategories
-        subcategories: List[CourseCategory] = []
-        seen_cat_ids = set()
-
-        cat_links = main_region.find_all("a", href=re.compile(r"categoryid=(\d+)"))
-        for a_tag in cat_links:
-            href = a_tag.get("href", "")
-            if "lang=" in href:
-                continue
-            cat_match = re.search(r"categoryid=(\d+)", href)
-            if not cat_match:
-                continue
-            cid = cat_match.group(1)
-            if category_id and cid == category_id:
-                continue
-            if cid in seen_cat_ids:
-                continue
-
-            name = a_tag.get_text(strip=True)
-            if not name or name in ["Zobacz więcej", "View"]:
-                continue
-
-            seen_cat_ids.add(cid)
-            subcategories.append(
-                CourseCategory(
-                    id=cid,
-                    name=name,
-                    url=urljoin("https://ekursy.put.poznan.pl/", href),
-                )
-            )
-
-        # 3. Extract courses
-        courses: List[DiscoveredCourse] = []
-        seen_course_ids = set()
-
-        courseboxes = main_region.select(".coursebox")
-        for box in courseboxes:
-            title_tag = box.select_one(".coursename a")
-            # If the box links to categoryid= instead of course/view.php, it's a category box
-            if title_tag and "categoryid=" in title_tag.get("href", ""):
-                continue
-
-            cid = box.get("data-courseid")
-            if not cid and title_tag and title_tag.get("href"):
-                cid_match = re.search(r"id=(\d+)", title_tag["href"])
-                if cid_match:
-                    cid = cid_match.group(1)
-
-            if not cid or cid in seen_course_ids:
-                continue
-
-
-            seen_course_ids.add(cid)
-            title = title_tag.get_text(strip=True) if title_tag else "Unknown Course"
-            course_url = (
-                title_tag["href"]
-                if title_tag and title_tag.get("href")
-                else f"https://ekursy.put.poznan.pl/course/view.php?id={cid}"
-            )
-
-            requires_key = bool(
-                box.select(".enrolmenticons .fa-key")
-                or box.select(".enrolmenticons i[title*='klucz' i]")
-                or box.select(".enrolmenticons i[title*='key' i]")
-                or box.select("img[src*='key']")
-            )
-
-            summary_tag = box.select_one(".content .summary") or box.select_one(".summary")
-            summary = summary_tag.get_text(strip=True) if summary_tag else None
-
-            courses.append(
-                DiscoveredCourse(
-                    id=cid,
-                    title=title,
-                    url=course_url,
-                    category_name=current_category.name if current_category else None,
-                    requires_key=requires_key,
-                    summary=summary,
-                )
-            )
-
-        # Fallback if no .coursebox found, check direct course/view.php links in region
-        if not courses:
-            for a_tag in main_region.find_all("a", href=re.compile(r"course/view\.php\?id=(\d+)")):
-                href = a_tag["href"]
-                cid_match = re.search(r"id=(\d+)", href)
-                if not cid_match:
-                    continue
-                cid = cid_match.group(1)
-                if cid in seen_course_ids:
-                    continue
-                title = a_tag.get_text(strip=True)
-                if not title or len(title) < 2 or title in ["Zobacz więcej", "View"]:
-                    continue
-
-                seen_course_ids.add(cid)
-                courses.append(
-                    DiscoveredCourse(
-                        id=cid,
-                        title=title,
-                        url=f"https://ekursy.put.poznan.pl/course/view.php?id={cid}",
-                        category_name=current_category.name if current_category else None,
-                        requires_key=False,
-                    )
-                )
-
-        return CategoryBrowseResult(
-            current_category=current_category,
-            subcategories=subcategories,
-            courses=courses,
-        ), None
+        return self.discovery.get_categories(category_id)
 
     def search_all_courses(
         self, query: str
     ) -> Tuple[Optional[List[DiscoveredCourse]], Optional[str]]:
-        """Search global eKursy course catalog via course/search.php."""
-        url = f"https://ekursy.put.poznan.pl/course/search.php?search={quote_plus(query)}"
-        try:
-            resp = self.session.get(url, timeout=30)
-            resp.raise_for_status()
-        except Exception as e:
-            return None, f"Failed to search courses: {e}"
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        main_region = soup.select_one("#region-main") or soup.find("div", role="main") or soup
-
-        courses: List[DiscoveredCourse] = []
-        seen_course_ids = set()
-
-        for box in main_region.select(".coursebox"):
-            cid = box.get("data-courseid")
-            title_tag = box.select_one(".coursename a")
-            if not cid and title_tag and title_tag.get("href"):
-                cid_match = re.search(r"id=(\d+)", title_tag["href"])
-                if cid_match:
-                    cid = cid_match.group(1)
-
-            if not cid or cid in seen_course_ids:
-                continue
-
-            seen_course_ids.add(cid)
-            title = title_tag.get_text(strip=True) if title_tag else "Unknown Course"
-            course_url = (
-                title_tag["href"]
-                if title_tag and title_tag.get("href")
-                else f"https://ekursy.put.poznan.pl/course/view.php?id={cid}"
-            )
-
-            requires_key = bool(
-                box.select(".enrolmenticons .fa-key")
-                or box.select(".enrolmenticons i[title*='klucz' i]")
-                or box.select(".enrolmenticons i[title*='key' i]")
-                or box.select("img[src*='key']")
-            )
-
-            cat_tag = box.select_one(".categoryname")
-            category_name = cat_tag.get_text(strip=True) if cat_tag else None
-
-            summary_tag = box.select_one(".content .summary") or box.select_one(".summary")
-            summary = summary_tag.get_text(strip=True) if summary_tag else None
-
-            courses.append(
-                DiscoveredCourse(
-                    id=cid,
-                    title=title,
-                    url=course_url,
-                    category_name=category_name,
-                    requires_key=requires_key,
-                    summary=summary,
-                )
-            )
-
-        return courses, None
+        return self.discovery.search_all_courses(query)
 
     def resolve_course_id_from_all_courses(
         self, query: str
     ) -> Tuple[Optional[str], Optional[List[DiscoveredCourse]], Optional[str]]:
-        """
-        Resolves a course name query to a course ID by searching the global course catalog.
-        Returns:
-            Tuple[Optional[str], Optional[List[DiscoveredCourse]], Optional[str]]:
-            - resolved_id (str if single match, else None)
-            - matches (list of DiscoveredCourse objects matching query)
-            - error (str if failure, else None)
-        """
-        courses, error = self.search_all_courses(query)
-        if error:
-            return None, None, error
-
-        if not courses:
-            return None, [], None
-
-        query_lower = query.lower()
-        exact_matches = [c for c in courses if query_lower == c.title.lower() or query == c.id]
-        if len(exact_matches) == 1:
-            return exact_matches[0].id, exact_matches, None
-
-        if len(courses) == 1:
-            return courses[0].id, courses, None
-
-        return None, courses, None
+        return self.discovery.resolve_course_id_from_all_courses(query)
 
     def get_enrolment_info(
         self, course_id: str
     ) -> Tuple[Optional[EnrolmentInfo], Optional[str]]:
-        """Inspect course enrolment options and prerequisites."""
-        url = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}"
-        try:
-            resp = self.session.get(url, timeout=30)
-            resp.raise_for_status()
-        except Exception as e:
-            return None, f"Failed to access course page: {e}"
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        if "course/view.php" in resp.url:
-            h1 = soup.find("h1")
-            course_title = h1.get_text(strip=True) if h1 else f"Course {course_id}"
-            return EnrolmentInfo(
-                course_id=course_id,
-                course_title=course_title,
-                status=EnrolmentStatus.ALREADY_ENROLLED,
-            ), None
-
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        main_region = soup.select_one("#region-main") or soup.find("div", role="main") or soup
-
-        coursename_el = main_region.select_one("h3.coursename") or main_region.select_one(
-            ".coursename"
-        )
-        if coursename_el:
-            course_title = coursename_el.get_text(strip=True)
-        else:
-            title_tag = (
-                main_region.select_one("h1")
-                or main_region.select_one("h2")
-                or soup.select_one("h1")
-                or soup.title
-            )
-            course_title = title_tag.get_text(strip=True) if title_tag else f"Course {course_id}"
-            if " | eKursy" in course_title:
-                course_title = course_title.split(" | eKursy")[0].strip()
-
-
-        enrol_form = None
-        for form in main_region.find_all("form"):
-            if (
-                "enrol" in form.get("action", "")
-                or form.find("input", {"name": "enrolpassword"})
-                or form.find("input", {"name": "instance"})
-            ):
-                enrol_form = form
-                break
-
-        if not enrol_form:
-            page_text = main_region.get_text()
-            if (
-                "You cannot enrol yourself in this course" in page_text
-                or "Nie możesz zapisać się na ten kurs" in page_text
-            ):
-                return EnrolmentInfo(
-                    course_id=course_id,
-                    course_title=course_title,
-                    status=EnrolmentStatus.NO_SELF_ENROLMENT,
-                    error_message=(
-                        "Self-enrolment is disabled for this course. "
-                        "Please contact the instructor."
-                    ),
-                ), None
-
-
-            return EnrolmentInfo(
-                course_id=course_id,
-                course_title=course_title,
-                status=EnrolmentStatus.NO_SELF_ENROLMENT,
-                error_message="No self-enrolment form found on page.",
-            ), None
-
-        instance_tag = enrol_form.find("input", {"name": "instance"})
-        instance_id = instance_tag.get("value") if instance_tag else None
-
-        sesskey_tag = enrol_form.find("input", {"name": "sesskey"})
-        sesskey = sesskey_tag.get("value") if sesskey_tag else None
-        if not sesskey:
-            sesskey_match = re.search(r'"sesskey":"([^"]+)"', resp.text)
-            if sesskey_match:
-                sesskey = sesskey_match.group(1)
-
-        password_input = enrol_form.find("input", {"name": "enrolpassword"})
-        requires_password = password_input is not None
-
-        status = (
-            EnrolmentStatus.CAN_ENROL_KEY_REQUIRED
-            if requires_password
-            else EnrolmentStatus.CAN_ENROL
-        )
-
-        return EnrolmentInfo(
-            course_id=course_id,
-            course_title=course_title,
-            status=status,
-            requires_password=requires_password,
-            instance_id=instance_id,
-            sesskey=sesskey,
-        ), None
+        return self.enrolment.get_enrolment_info(course_id)
 
     def enrol_course(
         self, course_id: str, password: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Submit self-enrolment into a course with optional enrolment key."""
-        url = f"https://ekursy.put.poznan.pl/course/view.php?id={course_id}"
-        try:
-            resp = self.session.get(url, timeout=30)
-            resp.raise_for_status()
-        except Exception as e:
-            return False, f"Failed to access course page: {e}"
-
-        if "course/view.php" in resp.url:
-            return True, "Already enrolled in this course."
-
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        main_region = soup.select_one("#region-main") or soup.find("div", role="main") or soup
-
-        enrol_form = None
-        for form in main_region.find_all("form"):
-            if (
-                "enrol" in form.get("action", "")
-                or form.find("input", {"name": "enrolpassword"})
-                or form.find("input", {"name": "instance"})
-            ):
-                enrol_form = form
-                break
-
-        if not enrol_form:
-            page_text = main_region.get_text()
-            if (
-                "You cannot enrol yourself in this course" in page_text
-                or "Nie możesz zapisać się na ten kurs" in page_text
-            ):
-                return False, (
-                    "Self-enrolment is disabled for this course. "
-                    "Please contact the instructor."
-                )
-            return False, "No self-enrolment form found on page."
-
-
-        form_data = {}
-        for inp in enrol_form.find_all("input"):
-            name = inp.get("name")
-            if not name:
-                continue
-            val = inp.get("value", "")
-            form_data[name] = val
-
-        form_data["id"] = course_id
-        if "sesskey" not in form_data or not form_data["sesskey"]:
-            sesskey_match = re.search(r'"sesskey":"([^"]+)"', resp.text)
-            if sesskey_match:
-                form_data["sesskey"] = sesskey_match.group(1)
-
-        requires_password = enrol_form.find("input", {"name": "enrolpassword"}) is not None
-        if requires_password:
-            if not password:
-                return False, "This course requires an enrolment key. Provide it via --key."
-            form_data["enrolpassword"] = password
-
-        submit_btn = enrol_form.find("input", {"type": "submit"}) or enrol_form.find(
-            "button", {"type": "submit"}
-        )
-        if submit_btn and submit_btn.get("name"):
-            form_data[submit_btn["name"]] = submit_btn.get("value", "Zapisz mnie")
-        elif "submitbutton" not in form_data:
-            form_data["submitbutton"] = "Zapisz mnie"
-
-        action = enrol_form.get("action", "")
-        post_url = urljoin(resp.url, action) if action else url
-
-        try:
-            post_resp = self.session.post(
-                post_url, data=form_data, headers={"Referer": resp.url}, timeout=30
-            )
-            post_resp.raise_for_status()
-        except Exception as e:
-            return False, f"Failed to submit enrolment form: {e}"
-
-        if "course/view.php" in post_resp.url:
-            return True, "Successfully enrolled in course!"
-
-        post_soup = BeautifulSoup(post_resp.text, "html.parser")
-        error_el = (
-            post_soup.select_one(".alert-danger")
-            or post_soup.select_one("span.error")
-            or post_soup.select_one(".error")
-        )
-        if error_el:
-            err_text = error_el.get_text(strip=True)
-            return False, f"Enrolment failed: {err_text}"
-
-        if "enrolpassword" in post_resp.text and requires_password:
-            return False, "Enrolment failed: Incorrect enrolment key."
-
-        return False, "Enrolment could not be confirmed. Check course status manually."
+        return self.enrolment.enrol_course(course_id, password)
 
     @staticmethod
     def _extract_filename_from_response(resp: requests.Response) -> str:
-        """
-        Extract filename from Content-Disposition header (RFC 5987 / RFC 6266)
-        or URL path, decoding UTF-8 bytes to prevent Mojibake.
-        """
-        cd = resp.headers.get("Content-Disposition", "")
-        filename = None
-        if cd:
-            # Check RFC 5987 filename*=UTF-8''filename.ext
-            match_utf8 = re.search(r"filename\*=UTF-8''([^;]+)", cd, re.IGNORECASE)
-            if match_utf8:
-                filename = unquote(match_utf8.group(1).strip(' "'))
-            else:
-                match_std = re.search(r'filename="?([^";]+)"?', cd)
-                if match_std:
-                    raw_fn = match_std.group(1).strip()
-                    try:
-                        filename = raw_fn.encode("latin1").decode("utf-8")
-                    except (UnicodeEncodeError, UnicodeDecodeError):
-                        filename = raw_fn
-
-        if not filename:
-            clean_url = resp.url.split("?")[0]
-            base = os.path.basename(clean_url)
-            if base and base != "pluginfile.php":
-                filename = unquote(base)
-            else:
-                parts = clean_url.split("/")
-                if len(parts) > 1 and parts[-1] and parts[-1] != "pluginfile.php":
-                    filename = unquote(parts[-1])
-
-        if not filename or filename == "pluginfile.php":
-            filename = "downloaded_file"
-
-        # Replace characters invalid in Windows filenames
-        filename = re.sub(r'[\\/*?:"<>|]', "_", filename)
-        return filename
-
-    def _download_single_file(self, url: str, target_dir: str) -> Optional[Tuple[str, int]]:
-        """Download a single file from URL into target_dir."""
-        try:
-            resp = self.session.get(url, stream=True, timeout=60)
-            resp.raise_for_status()
-        except Exception:
-            return None
-
-        # Check for HTML redirect or lock
-        content_type = resp.headers.get("Content-Type", "")
-        if "text/html" in content_type and "course/view.php" in resp.url:
-            return None
-
-        filename = self._extract_filename_from_response(resp)
-        os.makedirs(target_dir, exist_ok=True)
-        dest_path = os.path.join(target_dir, filename)
-
-        total_bytes = 0
-        with open(dest_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=32768):
-                if chunk:
-                    f.write(chunk)
-                    total_bytes += len(chunk)
-
-        return filename, total_bytes
+        return extract_filename_from_response(resp)
 
     def download_course_resources(
         self,
@@ -828,176 +340,19 @@ class CourseService:
         section_filter: Optional[str] = None,
         flat: bool = False,
     ) -> Tuple[List[DownloadedResource], Optional[str]]:
-        """
-        Downloads all downloadable activities (files and folders) from a course.
-        Categorizes files into subfolders (lecture, lab, project, general) unless flat=True.
-        """
         content, error = self.get_course_content(course_id)
         if error or not content:
             return [], error or "Could not retrieve course content."
-
-        downloaded_resources: List[DownloadedResource] = []
-
-        for section in content.sections:
-            if section_filter and section_filter.lower() not in section.name.lower():
-                continue
-
-            sec_lower = section.name.lower()
-            if flat:
-                target_subfolder = output_dir
-            elif "lab" in sec_lower or "task" in sec_lower or "zadani" in sec_lower:
-                target_subfolder = os.path.join(output_dir, "lab")
-            elif "project" in sec_lower or "proj" in sec_lower:
-                target_subfolder = os.path.join(output_dir, "project")
-            elif "lecture" in sec_lower or "wykład" in sec_lower:
-                target_subfolder = os.path.join(output_dir, "lecture")
-            elif "seminar" in sec_lower or "seminarium" in sec_lower:
-                target_subfolder = os.path.join(output_dir, "seminar")
-            elif "class" in sec_lower or "ćwiczen" in sec_lower:
-                target_subfolder = os.path.join(output_dir, "classes")
-            else:
-                target_subfolder = os.path.join(output_dir, "lecture")
-
-            for act in section.activities:
-                if act.is_restricted or not act.url:
-                    continue
-
-                if act.type in ("resource", "folder") or act.children:
-                    # Case 1: Folder module
-                    if act.type == "folder" or "mod/folder/view.php" in act.url:
-                        try:
-                            f_resp = self.session.get(act.url, timeout=30)
-                            f_soup = BeautifulSoup(f_resp.text, "html.parser")
-                            f_links = [
-                                a["href"]
-                                for a in f_soup.find_all("a", href=True)
-                                if "pluginfile.php" in a["href"]
-                            ]
-                            for fl in f_links:
-                                res = self._download_single_file(fl, target_subfolder)
-                                if res:
-                                    fn, sz = res
-                                    downloaded_resources.append(
-                                        DownloadedResource(
-                                            name=fn,
-                                            path=os.path.join(target_subfolder, fn),
-                                            size_bytes=sz,
-                                            section=section.name,
-                                            activity_type=act.type,
-                                        )
-                                    )
-                        except Exception:
-                            continue
-
-                    # Case 2: Resource landing page or direct resource
-                    elif act.type == "resource" or "mod/resource/view.php" in act.url:
-                        try:
-                            r_resp = self.session.get(act.url, timeout=30)
-                            c_type = r_resp.headers.get("Content-Type", "")
-                            if "text/html" in c_type:
-                                r_soup = BeautifulSoup(r_resp.text, "html.parser")
-                                plugin_links = [
-                                    a["href"]
-                                    for a in r_soup.find_all("a", href=True)
-                                    if "pluginfile.php" in a["href"]
-                                ]
-                                if plugin_links:
-                                    res = self._download_single_file(
-                                        plugin_links[0], target_subfolder
-                                    )
-                                    if res:
-                                        fn, sz = res
-                                        downloaded_resources.append(
-                                            DownloadedResource(
-                                                name=fn,
-                                                path=os.path.join(target_subfolder, fn),
-                                                size_bytes=sz,
-                                                section=section.name,
-                                                activity_type=act.type,
-                                            )
-                                        )
-                            else:
-                                res = self._download_single_file(act.url, target_subfolder)
-                                if res:
-                                    fn, sz = res
-                                    downloaded_resources.append(
-                                        DownloadedResource(
-                                            name=fn,
-                                            path=os.path.join(target_subfolder, fn),
-                                            size_bytes=sz,
-                                            section=section.name,
-                                            activity_type=act.type,
-                                        )
-                                    )
-                        except Exception:
-                            continue
-
-                    # Case 3: Children activities embedded
-                    if act.children:
-                        for ch in act.children:
-                            if ch.url:
-                                res = self._download_single_file(ch.url, target_subfolder)
-                                if res:
-                                    fn, sz = res
-                                    downloaded_resources.append(
-                                        DownloadedResource(
-                                            name=fn,
-                                            path=os.path.join(target_subfolder, fn),
-                                            size_bytes=sz,
-                                            section=section.name,
-                                            activity_type=ch.type,
-                                        )
-                                    )
-
-        return downloaded_resources, None
+        resources = self.downloader.download_resources(
+            content=content,
+            output_dir=output_dir,
+            section_filter=section_filter,
+            flat=flat,
+        )
+        return resources, None
 
     def export_course_notes(self, course_id: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Exports all section announcements, summaries, labels, and activity lists as Markdown.
-        """
         content, error = self.get_course_content(course_id)
         if error or not content:
             return None, error or "Could not retrieve course content."
-
-        lines = [
-            f"# {content.title}",
-            f"\nCourse ID: {course_id}  ",
-            f"Course URL: https://ekursy.put.poznan.pl/course/view.php?id={course_id}\n",
-            "---\n",
-        ]
-
-        for s_idx, section in enumerate(content.sections, 1):
-            lines.append(f"## {section.name}\n")
-            if section.summary:
-                lines.append(f"{section.summary}\n")
-
-            if section.activities:
-                lines.append("### Activities & Materials\n")
-                for act in section.activities:
-                    lock_str = f" 🔒 *({act.availability_info})*" if act.is_restricted else ""
-                    if act.url:
-                        lines.append(f"- [{act.name}]({act.url}) (`{act.type}`){lock_str}")
-                    else:
-                        lines.append(f"- **{act.name}** (`{act.type}`){lock_str}")
-
-                    if act.content:
-                        clean_content = html_to_markdown(act.content).strip()
-                        if clean_content:
-                            indented = "\n".join(
-                                f"  > {line}" for line in clean_content.splitlines()
-                            )
-                            lines.append(f"{indented}\n")
-
-                    if act.children:
-                        for ch in act.children:
-                            if ch.url:
-                                lines.append(f"  - [{ch.name}]({ch.url})")
-                            else:
-                                lines.append(f"  - {ch.name}")
-                lines.append("")
-
-            lines.append("---\n")
-
-        return "\n".join(lines), None
-
-
+        return CourseNotesExporter.export(course_id, content)
