@@ -1,7 +1,10 @@
+from typing import Optional
+
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from put_esys.cli.helpers import handle_output
 from put_esys.services.config import clear_credentials, load_credentials, save_credentials
 
 config_app = typer.Typer(help="Manage your PUT credentials")
@@ -37,22 +40,34 @@ def config_set(
 
 
 @config_app.command("show")
-def config_show():
+def config_show(
+    json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+):
     """Show current configuration (password masked)."""
     creds = load_credentials()
     if not creds:
-        msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
-        console.print(msg)
+        if json_format or output:
+            handle_output({}, output, json_format, None)
+        else:
+            msg = "[yellow]No credentials configured. Run 'put-esys config set' first.[/yellow]"
+            console.print(msg)
         return
 
-    table = Table(title="PUT CLI Configuration")
-    table.add_column("Key", style="cyan")
-    table.add_column("Value", style="magenta")
+    data = {
+        "username": creds["username"],
+        "password": "*" * 8,
+    }
 
-    table.add_row("Username", creds["username"])
-    table.add_row("Password", "*" * 8)
+    def display_config(cfg):
+        table = Table(title="PUT CLI Configuration")
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", style="magenta")
+        table.add_row("Username", cfg["username"])
+        table.add_row("Password", cfg["password"])
+        console.print(table)
 
-    console.print(table)
+    handle_output(data, output, json_format, display_config)
 
 
 @config_app.command("delete")

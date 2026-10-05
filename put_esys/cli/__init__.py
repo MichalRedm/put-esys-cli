@@ -149,37 +149,23 @@ def download(
                 resp = client.download_resource(url)
                 html_content = None
 
-        # Try to get filename from Content-Disposition
-        cd = resp.headers.get("Content-Disposition")
-        if not output and cd:
-            match = re.findall("filename=(.+)", cd)
-            if match:
-                output = match[0].strip(' "')
+        from put_esys.utils.http import download_stream_to_file, extract_filename_from_response
 
         if not output:
-            output = os.path.basename(url.split("?")[0])
-            if not output or output == "pluginfile.php":
-                parts = url.split("/")
-                if len(parts) > 1:
-                    output = parts[-1].split("?")[0]
-
-            if not output:
-                output = "downloaded_file"
-
-        import urllib.parse
-
-        output = urllib.parse.unquote(output)
+            output = extract_filename_from_response(resp)
 
         if html_content is not None:
+            parent = os.path.dirname(output)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             with open(output, "w", encoding="utf-8") as f:
                 f.write(html_content)
+            bytes_written = len(html_content.encode("utf-8"))
         else:
-            with open(output, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            bytes_written = download_stream_to_file(resp, output, chunk_size=8192)
 
         console.print(f"[green]Successfully downloaded [bold]{output}[/bold][/green]")
-        console.print(f"Size: [bold]{resp.headers.get('Content-Length', 'unknown')}[/bold] bytes")
+        console.print(f"Size: [bold]{bytes_written}[/bold] bytes")
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")

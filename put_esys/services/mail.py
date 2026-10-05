@@ -15,6 +15,28 @@ from typing import List, Optional
 from put_esys.models.mail import EmailDetails, EmailSummary
 
 
+def decode_mime_header(raw_header: Optional[str]) -> str:
+    """
+    Decodes RFC 2047 MIME encoded headers into a unified string.
+    Handles multi-chunk headers, default charsets, and lookup fallbacks.
+    """
+    if not raw_header:
+        return ""
+
+    decoded_chunks = decode_header(raw_header)
+    parts = []
+    for chunk, encoding in decoded_chunks:
+        if isinstance(chunk, bytes):
+            enc = encoding or "utf-8"
+            try:
+                parts.append(chunk.decode(enc))
+            except (LookupError, UnicodeDecodeError):
+                parts.append(chunk.decode("utf-8", errors="replace"))
+        else:
+            parts.append(str(chunk))
+    return "".join(parts)
+
+
 class MailClient:
     def __init__(self, username, password):
         self.username = username
@@ -75,47 +97,27 @@ class MailClient:
 
             email_list = []
             for mail_id in latest_ids:
-                status, msg_data = mail.fetch(mail_id, "(RFC822)")
+                # Optimized header-only fetch avoiding heavy full-body and attachment downloads
+                status, msg_data = mail.fetch(
+                    mail_id, "(BODY.PEEK[HEADER.FIELDS (Subject From To Date)])"
+                )
                 if status != "OK":
                     continue
 
                 for response_part in msg_data:
                     if isinstance(response_part, tuple):
                         msg = email.message_from_bytes(response_part[1])
-
-                        subject_raw = decode_header(msg.get("Subject", ""))[0]
-                        subject = subject_raw[0]
-                        if isinstance(subject, bytes):
-                            encoding = subject_raw[1] or "utf-8"
-                            try:
-                                subject = subject.decode(encoding)
-                            except LookupError:
-                                subject = subject.decode("utf-8", errors="replace")
-
-                        from_raw = decode_header(msg.get("From", ""))[0]
-                        from_ = from_raw[0]
-                        if isinstance(from_, bytes):
-                            encoding = from_raw[1] or "utf-8"
-                            try:
-                                from_ = from_.decode(encoding)
-                            except LookupError:
-                                from_ = from_.decode("utf-8", errors="replace")
-
-                        to_raw = decode_header(msg.get("To", ""))[0]
-                        to = to_raw[0]
-                        if isinstance(to, bytes):
-                            encoding = to_raw[1] or "utf-8"
-                            try:
-                                to = to.decode(encoding)
-                            except LookupError:
-                                to = to.decode("utf-8", errors="replace")
+                        subject = decode_mime_header(msg.get("Subject", ""))
+                        from_ = decode_mime_header(msg.get("From", ""))
+                        to_header = msg.get("To")
+                        to = decode_mime_header(to_header) if to_header else None
 
                         email_list.append(
                             EmailSummary(
                                 id=mail_id.decode(),
-                                subject=str(subject),
-                                from_=str(from_),
-                                to=str(to) if to else None,
+                                subject=subject,
+                                from_=from_,
+                                to=to,
                                 date=msg.get("Date"),
                             )
                         )
@@ -134,33 +136,10 @@ class MailClient:
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
-
-                    subject_raw = decode_header(msg.get("Subject", ""))[0]
-                    subject = subject_raw[0]
-                    if isinstance(subject, bytes):
-                        encoding = subject_raw[1] or "utf-8"
-                        try:
-                            subject = subject.decode(encoding)
-                        except LookupError:
-                            subject = subject.decode("utf-8", errors="replace")
-
-                    from_raw = decode_header(msg.get("From", ""))[0]
-                    from_ = from_raw[0]
-                    if isinstance(from_, bytes):
-                        encoding = from_raw[1] or "utf-8"
-                        try:
-                            from_ = from_.decode(encoding)
-                        except LookupError:
-                            from_ = from_.decode("utf-8", errors="replace")
-
-                    to_raw = decode_header(msg.get("To", ""))[0]
-                    to = to_raw[0]
-                    if isinstance(to, bytes):
-                        encoding = to_raw[1] or "utf-8"
-                        try:
-                            to = to.decode(encoding)
-                        except LookupError:
-                            to = to.decode("utf-8", errors="replace")
+                    subject = decode_mime_header(msg.get("Subject", ""))
+                    from_ = decode_mime_header(msg.get("From", ""))
+                    to_header = msg.get("To")
+                    to = decode_mime_header(to_header) if to_header else None
 
                     body = ""
                     attachments = []
@@ -176,15 +155,8 @@ class MailClient:
                             if is_attach:
                                 filename = part.get_filename()
                                 if filename:
-                                    decoded_filename = decode_header(filename)[0]
-                                    fname = decoded_filename[0]
-                                    if isinstance(fname, bytes):
-                                        encoding = decoded_filename[1] or "utf-8"
-                                        try:
-                                            fname = fname.decode(encoding, errors="replace")
-                                        except LookupError:
-                                            fname = fname.decode("utf-8", errors="replace")
-                                    attachments.append(str(fname))
+                                    fname = decode_mime_header(filename)
+                                    attachments.append(fname)
                                 continue
 
                             is_plain = content_type == "text/plain"
@@ -205,9 +177,9 @@ class MailClient:
 
                     return EmailDetails(
                         id=str(mail_id),
-                        subject=str(subject),
-                        from_=str(from_),
-                        to=str(to) if to else None,
+                        subject=subject,
+                        from_=from_,
+                        to=to,
                         date=msg.get("Date"),
                         body=body,
                         attachments=attachments,
@@ -242,16 +214,9 @@ class MailClient:
                         if is_attach:
                             part_filename = part.get_filename()
                             if part_filename:
-                                decoded_filename = decode_header(part_filename)[0]
-                                fname = decoded_filename[0]
-                                if isinstance(fname, bytes):
-                                    encoding = decoded_filename[1] or "utf-8"
-                                    try:
-                                        fname = fname.decode(encoding, errors="replace")
-                                    except LookupError:
-                                        fname = fname.decode("utf-8", errors="replace")
+                                fname = decode_mime_header(part_filename)
 
-                                if str(fname) == filename:
+                                if fname == filename:
                                     match_count += 1
                                     if index is not None:
                                         if match_count == index:
@@ -310,4 +275,4 @@ class MailClient:
             finally:
                 mail.logout()
         except Exception:
-            raise
+            pass
