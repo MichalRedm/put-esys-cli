@@ -10,6 +10,7 @@ from put_esys.cli.display import (
     display_course_content,
     display_courses_list,
     display_discovered_courses,
+    display_downloaded_resources,
     display_enrolment_result,
 )
 from put_esys.cli.helpers import (
@@ -324,4 +325,151 @@ def course_enrol(
 
     if not success:
         raise typer.Exit(code=1)
+
+
+@course_app.command("download")
+@catch_errors
+def course_download(
+    id_or_name: str = typer.Argument(..., help="Course ID, URL, or course title query"),
+    output_dir: Optional[str] = typer.Option(
+        None, "--output-dir", "-d", help="Directory where resources will be downloaded"
+    ),
+    section: Optional[str] = typer.Option(
+        None, "--section", "-s", help="Filter download to sections matching this name"
+    ),
+    flat: bool = typer.Option(
+        False, "--flat", help="Download all files directly to output dir without subfolders"
+    ),
+    json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output summary file path"),
+):
+    """Download all downloadable materials (resources, folders) from a course."""
+    client = EKursyClient()
+    check_authenticated(client)
+
+    service = CourseService(client.session)
+    course_id = id_or_name
+    course_title_hint = "Course"
+
+    if not is_numeric_or_url(id_or_name):
+        resolved_id, matches, error = service.resolve_course_id_by_name(id_or_name)
+        if error:
+            console.print(f"[red]Error resolving course name: {error}[/red]", err=True)
+            raise typer.Exit(code=1)
+        if not matches:
+            console.print(f"[red]Error: No courses matched '{id_or_name}'[/red]", err=True)
+            raise typer.Exit(code=1)
+        if len(matches) > 1:
+            console.print(
+                f"[yellow]Multiple courses matched '{id_or_name}':[/yellow]", err=True
+            )
+            for m in matches[:10]:
+                console.print(f" - ID: {m.id} | {m.title}", err=True)
+            raise typer.Exit(code=1)
+
+        course_id = resolved_id
+        course_title_hint = matches[0].title
+        if not json_format and not output:
+            console.print(
+                f"Auto-resolved '{id_or_name}' to course ID {course_id} ({matches[0].title})",
+                err=True,
+            )
+    elif id_or_name.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_name)
+        if match:
+            course_id = match.group(1)
+        else:
+            console.print("[red]Could not parse course ID from URL.[/red]", err=True)
+            raise typer.Exit(code=1)
+
+    target_dir = output_dir or f"./{course_title_hint}"
+
+    if not json_format and not output:
+        console.print(
+            f"Downloading resources for course {course_id} into '{target_dir}'...",
+            err=True,
+        )
+
+    downloaded, error = service.download_course_resources(
+        course_id=course_id,
+        output_dir=target_dir,
+        section_filter=section,
+        flat=flat,
+    )
+    if error:
+        console.print(f"[red]Error downloading resources: {error}[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    handle_output(
+        downloaded,
+        output,
+        json_format,
+        display_downloaded_resources,
+    )
+
+
+@course_app.command("export-notes")
+@catch_errors
+def course_export_notes(
+    id_or_name: str = typer.Argument(..., help="Course ID, URL, or course title query"),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file path (defaults to stdout in Markdown)"
+    ),
+    json_format: bool = typer.Option(False, "--json", help="Output notes as JSON data"),
+):
+    """Export complete course syllabus, section summaries, and activity instructions to Markdown."""
+    client = EKursyClient()
+    check_authenticated(client)
+
+    service = CourseService(client.session)
+    course_id = id_or_name
+
+    if not is_numeric_or_url(id_or_name):
+        resolved_id, matches, error = service.resolve_course_id_by_name(id_or_name)
+        if error:
+            console.print(f"[red]Error resolving course name: {error}[/red]", err=True)
+            raise typer.Exit(code=1)
+        if not matches:
+            console.print(f"[red]Error: No courses matched '{id_or_name}'[/red]", err=True)
+            raise typer.Exit(code=1)
+        if len(matches) > 1:
+            console.print(
+                f"[yellow]Multiple courses matched '{id_or_name}':[/yellow]", err=True
+            )
+            for m in matches[:10]:
+                console.print(f" - ID: {m.id} | {m.title}", err=True)
+            raise typer.Exit(code=1)
+
+        course_id = resolved_id
+        if not json_format and not output:
+            console.print(
+                f"Auto-resolved '{id_or_name}' to course ID {course_id} ({matches[0].title})",
+                err=True,
+            )
+    elif id_or_name.startswith("http"):
+        match = re.search(r"id=(\d+)", id_or_name)
+        if match:
+            course_id = match.group(1)
+        else:
+            console.print("[red]Could not parse course ID from URL.[/red]", err=True)
+            raise typer.Exit(code=1)
+
+    markdown_text, error = service.export_course_notes(course_id)
+    if error:
+        console.print(f"[red]Error exporting course notes: {error}[/red]", err=True)
+        raise typer.Exit(code=1)
+
+    if json_format:
+        payload = {"course_id": course_id, "markdown": markdown_text}
+        handle_output(payload, output, True, None)
+        return
+
+    if output:
+        with open(output, "w", encoding="utf-8") as f:
+            f.write(markdown_text)
+        console.print(f"[green]Course notes exported to: {output}[/green]")
+    else:
+        # Print directly to stdout
+        sys.stdout.write(markdown_text)
+
 

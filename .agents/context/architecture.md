@@ -47,7 +47,7 @@ flowchart TD
 
 ### 1. Presentation Layer (`put_esys/cli/`)
 - `__init__.py`: Primary Typer app instance, sets up sub-commands and top-level commands (`login`, `save`, `download`).
-- `course.py`: Commands for listing enrolled courses, searching (`--all`), browsing categories, global search (`find`), self-enrolling (`enrol`), and viewing course hierarchy.
+- `course.py`: Commands for listing enrolled courses, searching (`--all`), browsing categories, global search (`find`), self-enrolling (`enrol`), viewing course hierarchy, downloading resources (`download`), and exporting notes (`export-notes`).
 - `assignment.py`: Commands for inspecting assignments, uploading files, modifying submissions, and final submission.
 - `quiz.py`: Commands for inspecting quizzes, dumping attempts to Markdown templates, syncing edited answers, and submitting.
 - `mail.py`: Commands for mailbox listing, search, reading emails, downloading attachments, and sending.

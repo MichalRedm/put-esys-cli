@@ -1,6 +1,7 @@
+import os
 import re
 from typing import List, Optional, Tuple
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, unquote, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -12,10 +13,12 @@ from put_esys.models.course import (
     CourseCategory,
     CourseContent,
     DiscoveredCourse,
+    DownloadedResource,
     EnrolmentInfo,
     EnrolmentStatus,
     Section,
 )
+from put_esys.utils.markdown import html_to_markdown
 
 
 class CourseService:
@@ -181,6 +184,11 @@ class CourseService:
                 section_id = section_li.get("id", "?")
                 section_name = f"Section {section_id}"
 
+            summary_tag = section_li.select_one(".summary")
+            section_summary = None
+            if summary_tag and summary_tag.get_text(strip=True):
+                section_summary = html_to_markdown(str(summary_tag))
+
             activities = []
             for activity_li in section_li.select("li.activity"):
                 a_tag = activity_li.select_one("div.activityname a")
@@ -200,13 +208,27 @@ class CourseService:
                 )
                 content_html = str(desc_el) if desc_el else None
 
+                avail_el = activity_li.select_one(".availabilityinfo")
+                is_restricted = False
+                avail_info = None
+                if avail_el:
+                    is_restricted = "isrestricted" in avail_el.get("class", []) or True
+                    avail_info = avail_el.get_text(" ", strip=True)
+
                 if a_tag:
                     for span in a_tag.find_all("span", class_="accesshide"):
                         span.decompose()
                     name = a_tag.get_text(strip=True)
                     link = a_tag["href"]
                     activities.append(
-                        Activity(name=name, url=link, type=activity_type, content=content_html)
+                        Activity(
+                            name=name,
+                            url=link,
+                            type=activity_type,
+                            content=content_html,
+                            is_restricted=is_restricted,
+                            availability_info=avail_info,
+                        )
                     )
                 else:
                     activity_item = activity_li.select_one("div.activity-item")
@@ -237,6 +259,8 @@ class CourseService:
                                     type=activity_type,
                                     children=children,
                                     content=content_html,
+                                    is_restricted=is_restricted,
+                                    availability_info=avail_info,
                                 )
                             )
                         else:
@@ -251,11 +275,19 @@ class CourseService:
                                     url=link,
                                     type=activity_type,
                                     content=content_html,
+                                    is_restricted=is_restricted,
+                                    availability_info=avail_info,
                                 )
                             )
 
-            if activities or (name_tag and section_name):
-                sections.append(Section(name=section_name, activities=activities))
+            if activities or (name_tag and section_name) or section_summary:
+                sections.append(
+                    Section(
+                        name=section_name,
+                        summary=section_summary,
+                        activities=activities,
+                    )
+                )
 
         return CourseContent(title=course_title, sections=sections), None
 
@@ -723,4 +755,249 @@ class CourseService:
             return False, "Enrolment failed: Incorrect enrolment key."
 
         return False, "Enrolment could not be confirmed. Check course status manually."
+
+    @staticmethod
+    def _extract_filename_from_response(resp: requests.Response) -> str:
+        """
+        Extract filename from Content-Disposition header (RFC 5987 / RFC 6266)
+        or URL path, decoding UTF-8 bytes to prevent Mojibake.
+        """
+        cd = resp.headers.get("Content-Disposition", "")
+        filename = None
+        if cd:
+            # Check RFC 5987 filename*=UTF-8''filename.ext
+            match_utf8 = re.search(r"filename\*=UTF-8''([^;]+)", cd, re.IGNORECASE)
+            if match_utf8:
+                filename = unquote(match_utf8.group(1).strip(' "'))
+            else:
+                match_std = re.search(r'filename="?([^";]+)"?', cd)
+                if match_std:
+                    raw_fn = match_std.group(1).strip()
+                    try:
+                        filename = raw_fn.encode("latin1").decode("utf-8")
+                    except (UnicodeEncodeError, UnicodeDecodeError):
+                        filename = raw_fn
+
+        if not filename:
+            clean_url = resp.url.split("?")[0]
+            base = os.path.basename(clean_url)
+            if base and base != "pluginfile.php":
+                filename = unquote(base)
+            else:
+                parts = clean_url.split("/")
+                if len(parts) > 1 and parts[-1] and parts[-1] != "pluginfile.php":
+                    filename = unquote(parts[-1])
+
+        if not filename or filename == "pluginfile.php":
+            filename = "downloaded_file"
+
+        # Replace characters invalid in Windows filenames
+        filename = re.sub(r'[\\/*?:"<>|]', "_", filename)
+        return filename
+
+    def _download_single_file(self, url: str, target_dir: str) -> Optional[Tuple[str, int]]:
+        """Download a single file from URL into target_dir."""
+        try:
+            resp = self.session.get(url, stream=True, timeout=60)
+            resp.raise_for_status()
+        except Exception:
+            return None
+
+        # Check for HTML redirect or lock
+        content_type = resp.headers.get("Content-Type", "")
+        if "text/html" in content_type and "course/view.php" in resp.url:
+            return None
+
+        filename = self._extract_filename_from_response(resp)
+        os.makedirs(target_dir, exist_ok=True)
+        dest_path = os.path.join(target_dir, filename)
+
+        total_bytes = 0
+        with open(dest_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=32768):
+                if chunk:
+                    f.write(chunk)
+                    total_bytes += len(chunk)
+
+        return filename, total_bytes
+
+    def download_course_resources(
+        self,
+        course_id: str,
+        output_dir: str,
+        section_filter: Optional[str] = None,
+        flat: bool = False,
+    ) -> Tuple[List[DownloadedResource], Optional[str]]:
+        """
+        Downloads all downloadable activities (files and folders) from a course.
+        Categorizes files into subfolders (lecture, lab, project, general) unless flat=True.
+        """
+        content, error = self.get_course_content(course_id)
+        if error or not content:
+            return [], error or "Could not retrieve course content."
+
+        downloaded_resources: List[DownloadedResource] = []
+
+        for section in content.sections:
+            if section_filter and section_filter.lower() not in section.name.lower():
+                continue
+
+            sec_lower = section.name.lower()
+            if flat:
+                target_subfolder = output_dir
+            elif "lab" in sec_lower or "task" in sec_lower or "zadani" in sec_lower:
+                target_subfolder = os.path.join(output_dir, "lab")
+            elif "project" in sec_lower or "proj" in sec_lower:
+                target_subfolder = os.path.join(output_dir, "project")
+            elif "lecture" in sec_lower or "wykład" in sec_lower:
+                target_subfolder = os.path.join(output_dir, "lecture")
+            elif "seminar" in sec_lower or "seminarium" in sec_lower:
+                target_subfolder = os.path.join(output_dir, "seminar")
+            elif "class" in sec_lower or "ćwiczen" in sec_lower:
+                target_subfolder = os.path.join(output_dir, "classes")
+            else:
+                target_subfolder = os.path.join(output_dir, "lecture")
+
+            for act in section.activities:
+                if act.is_restricted or not act.url:
+                    continue
+
+                if act.type in ("resource", "folder") or act.children:
+                    # Case 1: Folder module
+                    if act.type == "folder" or "mod/folder/view.php" in act.url:
+                        try:
+                            f_resp = self.session.get(act.url, timeout=30)
+                            f_soup = BeautifulSoup(f_resp.text, "html.parser")
+                            f_links = [
+                                a["href"]
+                                for a in f_soup.find_all("a", href=True)
+                                if "pluginfile.php" in a["href"]
+                            ]
+                            for fl in f_links:
+                                res = self._download_single_file(fl, target_subfolder)
+                                if res:
+                                    fn, sz = res
+                                    downloaded_resources.append(
+                                        DownloadedResource(
+                                            name=fn,
+                                            path=os.path.join(target_subfolder, fn),
+                                            size_bytes=sz,
+                                            section=section.name,
+                                            activity_type=act.type,
+                                        )
+                                    )
+                        except Exception:
+                            continue
+
+                    # Case 2: Resource landing page or direct resource
+                    elif act.type == "resource" or "mod/resource/view.php" in act.url:
+                        try:
+                            r_resp = self.session.get(act.url, timeout=30)
+                            c_type = r_resp.headers.get("Content-Type", "")
+                            if "text/html" in c_type:
+                                r_soup = BeautifulSoup(r_resp.text, "html.parser")
+                                plugin_links = [
+                                    a["href"]
+                                    for a in r_soup.find_all("a", href=True)
+                                    if "pluginfile.php" in a["href"]
+                                ]
+                                if plugin_links:
+                                    res = self._download_single_file(
+                                        plugin_links[0], target_subfolder
+                                    )
+                                    if res:
+                                        fn, sz = res
+                                        downloaded_resources.append(
+                                            DownloadedResource(
+                                                name=fn,
+                                                path=os.path.join(target_subfolder, fn),
+                                                size_bytes=sz,
+                                                section=section.name,
+                                                activity_type=act.type,
+                                            )
+                                        )
+                            else:
+                                res = self._download_single_file(act.url, target_subfolder)
+                                if res:
+                                    fn, sz = res
+                                    downloaded_resources.append(
+                                        DownloadedResource(
+                                            name=fn,
+                                            path=os.path.join(target_subfolder, fn),
+                                            size_bytes=sz,
+                                            section=section.name,
+                                            activity_type=act.type,
+                                        )
+                                    )
+                        except Exception:
+                            continue
+
+                    # Case 3: Children activities embedded
+                    if act.children:
+                        for ch in act.children:
+                            if ch.url:
+                                res = self._download_single_file(ch.url, target_subfolder)
+                                if res:
+                                    fn, sz = res
+                                    downloaded_resources.append(
+                                        DownloadedResource(
+                                            name=fn,
+                                            path=os.path.join(target_subfolder, fn),
+                                            size_bytes=sz,
+                                            section=section.name,
+                                            activity_type=ch.type,
+                                        )
+                                    )
+
+        return downloaded_resources, None
+
+    def export_course_notes(self, course_id: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Exports all section announcements, summaries, labels, and activity lists as Markdown.
+        """
+        content, error = self.get_course_content(course_id)
+        if error or not content:
+            return None, error or "Could not retrieve course content."
+
+        lines = [
+            f"# {content.title}",
+            f"\nCourse ID: {course_id}  ",
+            f"Course URL: https://ekursy.put.poznan.pl/course/view.php?id={course_id}\n",
+            "---\n",
+        ]
+
+        for s_idx, section in enumerate(content.sections, 1):
+            lines.append(f"## {section.name}\n")
+            if section.summary:
+                lines.append(f"{section.summary}\n")
+
+            if section.activities:
+                lines.append("### Activities & Materials\n")
+                for act in section.activities:
+                    lock_str = f" 🔒 *({act.availability_info})*" if act.is_restricted else ""
+                    if act.url:
+                        lines.append(f"- [{act.name}]({act.url}) (`{act.type}`){lock_str}")
+                    else:
+                        lines.append(f"- **{act.name}** (`{act.type}`){lock_str}")
+
+                    if act.content:
+                        clean_content = html_to_markdown(act.content).strip()
+                        if clean_content:
+                            indented = "\n".join(
+                                f"  > {line}" for line in clean_content.splitlines()
+                            )
+                            lines.append(f"{indented}\n")
+
+                    if act.children:
+                        for ch in act.children:
+                            if ch.url:
+                                lines.append(f"  - [{ch.name}]({ch.url})")
+                            else:
+                                lines.append(f"  - {ch.name}")
+                lines.append("")
+
+            lines.append("---\n")
+
+        return "\n".join(lines), None
+
 

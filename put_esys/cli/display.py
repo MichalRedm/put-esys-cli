@@ -13,6 +13,7 @@ from put_esys.models.course import (
     Course,
     CourseContent,
     DiscoveredCourse,
+    DownloadedResource,
 )
 from put_esys.models.mail import EmailDetails, EmailSummary
 from put_esys.models.quiz import QuizAttemptDetails, QuizInfo, QuizSearchResult
@@ -68,6 +69,14 @@ def display_course_content(content: CourseContent) -> None:
 
     for section in content.sections:
         section_tree = tree.add(f"[bold cyan]{section.name}[/bold cyan]")
+        if section.summary:
+            summary_snippet = section.summary.strip()
+            if len(summary_snippet) > 250:
+                summary_snippet = summary_snippet[:247] + "..."
+            section_tree.add(
+                Panel(Markdown(summary_snippet), title="Section Info", border_style="dim cyan")
+            )
+
         for activity in section.activities:
             if activity.type == "label":
                 raw_content = activity.content or activity.name or ""
@@ -77,8 +86,11 @@ def display_course_content(content: CourseContent) -> None:
                 continue
 
             icon = get_activity_icon(activity.type)
-            label = f"{icon} [magenta]{activity.name}[/magenta]"
-            if activity.url:
+            lock_prefix = "🔒 " if activity.is_restricted else ""
+            label = f"{lock_prefix}{icon} [magenta]{activity.name}[/magenta]"
+            if activity.is_restricted and activity.availability_info:
+                label += f" [yellow]({activity.availability_info})[/yellow]"
+            elif activity.url:
                 label += f" ([blue]{activity.url}[/blue])"
 
             activity_node = section_tree.add(label)
@@ -93,12 +105,47 @@ def display_course_content(content: CourseContent) -> None:
             if activity.children:
                 for child in activity.children:
                     child_icon = get_activity_icon(child.type)
-                    child_label = f"{child_icon} [magenta]{child.name}[/magenta]"
+                    child_lock = "🔒 " if child.is_restricted else ""
+                    child_label = f"{child_lock}{child_icon} [magenta]{child.name}[/magenta]"
                     if child.url:
                         child_label += f" ([blue]{child.url}[/blue])"
                     activity_node.add(child_label)
 
     console.print(tree)
+
+
+def display_downloaded_resources(resources: list[DownloadedResource]) -> None:
+    """Renders the downloaded course resources table."""
+    if not resources:
+        console.print("[yellow]No downloadable resources were found or saved.[/yellow]")
+        return
+
+    table = Table(title=f"Downloaded Course Resources ({len(resources)})")
+    table.add_column("#", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Filename", style="magenta")
+    table.add_column("Size", justify="right", style="green")
+    table.add_column("Section", style="cyan")
+    table.add_column("Local Path", style="blue")
+
+    total_bytes = 0
+    for idx, res in enumerate(resources, 1):
+        total_bytes += res.size_bytes
+        if res.size_bytes >= 1024 * 1024:
+            size_str = f"{res.size_bytes / (1024 * 1024):.1f} MB"
+        elif res.size_bytes >= 1024:
+            size_str = f"{res.size_bytes / 1024:.1f} KB"
+        else:
+            size_str = f"{res.size_bytes} B"
+
+        table.add_row(str(idx), res.name, size_str, res.section, res.path)
+
+    console.print(table)
+    if total_bytes >= 1024 * 1024:
+        total_str = f"{total_bytes / (1024 * 1024):.1f} MB"
+    else:
+        total_str = f"{total_bytes / 1024:.1f} KB"
+    msg = f"[bold green]Total downloaded: {len(resources)} files ({total_str})[/bold green]"
+    console.print(msg)
 
 
 def display_assignment(info: AssignmentInfo) -> None:

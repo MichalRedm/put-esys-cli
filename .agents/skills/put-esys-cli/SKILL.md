@@ -30,6 +30,8 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys course find <QUERY> [--json] [-o/--output PATH]`: Search global eKursy course catalog across all categories.
 - `put-esys course categories [CATEGORY_ID] [--json] [-o/--output PATH]`: Browse course categories and discover courses inside a category (e.g. `put-esys course categories 3160` for Semestr 9).
 - `put-esys course enrol <ID_OR_NAME> [--key KEY] [-y/--yes] [--json] [-o/--output PATH]`: Self-enrol into a course, providing an enrolment key if required.
+- `put-esys course download <ID_OR_NAME> [-d/--output-dir DIR] [-s/--section SECTION] [--flat] [--json] [-o/--output PATH]`: Download all materials (presentations, lab sheets, datasets, archives) into organized subfolders (`lecture`, `lab`, `project`) with automatic UTF-8 filename decoding.
+- `put-esys course export-notes <ID_OR_NAME> [-o/--output PATH] [--json]`: Export complete course syllabus, section summaries, and activity instructions to clean Markdown.
 
 - `put-esys assignment show <ID_OR_URL> [--json] [-o/--output PATH]`: Show content and status of a specific assignment.
 - `put-esys assignment upload <ID_OR_URL> <FILE_PATH> [--name NEW_NAME]`: Upload a file to an assignment (optionally under a custom name via `--name`) and save the submission changes.

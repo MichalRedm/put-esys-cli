@@ -10,11 +10,22 @@ class Activity(BaseModel):
     type: str
     content: Optional[str] = None
     children: Optional[List["Activity"]] = None
+    is_restricted: bool = False
+    availability_info: Optional[str] = None
 
 
 class Section(BaseModel):
     name: str
+    summary: Optional[str] = None
     activities: List[Activity]
+
+
+class DownloadedResource(BaseModel):
+    name: str
+    path: str
+    size_bytes: int
+    section: str
+    activity_type: str
 
 
 class Course(BaseModel):
