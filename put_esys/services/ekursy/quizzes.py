@@ -15,7 +15,7 @@ from put_esys.models.quiz import (
 )
 from put_esys.utils.markdown import markdown_to_html_with_math
 
-from .draft_files import upload_draft_file
+from .draft_files import MoodleDraftFileManager
 
 
 class QuizService:
@@ -425,17 +425,7 @@ class QuizService:
         ctx_match = re.search(r'"contextid":(\d+)', r.text)
         ctx_id = ctx_match.group(1) if ctx_match else None
 
-        if attachment_path:
-            if not itemid:
-                raise Exception(f"Question {question_number} does not support file attachments.")
-            if not ctx_id:
-                raise Exception("Could not find context ID on the quiz page.")
-            sesskey = data.get("sesskey")
-            if not sesskey:
-                raise Exception("Could not find session key (sesskey).")
-            upload_draft_file(self.session, attachment_path, itemid, ctx_id, sesskey, new_name)
-
-        if remove_attachment:
+        if attachment_path or remove_attachment or rename_attachment:
             if not itemid:
                 raise Exception(f"Question {question_number} does not support file attachments.")
             if not ctx_id:
@@ -444,54 +434,16 @@ class QuizService:
             if not sesskey:
                 raise Exception("Could not find session key (sesskey).")
 
-            delete_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
-            params = {
-                "ctx_id": ctx_id,
-                "itemid": itemid,
-                "env": "filemanager",
-                "course": "1",
-                "maxbytes": "0",
-                "areamaxbytes": "-1",
-                "maxfiles": "-1",
-                "subdirs": "0",
-                "sesskey": sesskey,
-                "action": "deletedraft",
-                "draftpath": "/",
-                "filename": remove_attachment,
-            }
-            resp = self.session.get(delete_url, params=params)
-            resp.raise_for_status()
-
-        if rename_attachment:
-            if not new_name:
-                raise Exception("New name (--new-name) must be provided to rename an attachment.")
-            if not itemid:
-                raise Exception(f"Question {question_number} does not support file attachments.")
-            if not ctx_id:
-                raise Exception("Could not find context ID on the quiz page.")
-            sesskey = data.get("sesskey")
-            if not sesskey:
-                raise Exception("Could not find session key (sesskey).")
-
-            rename_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
-            params = {
-                "ctx_id": ctx_id,
-                "itemid": itemid,
-                "env": "filemanager",
-                "course": "1",
-                "maxbytes": "0",
-                "areamaxbytes": "-1",
-                "maxfiles": "-1",
-                "subdirs": "0",
-                "sesskey": sesskey,
-                "action": "rename",
-                "draftpath": "/",
-            }
-            post_data = {"newfilename": new_name, "filename": rename_attachment, "draftpath": "/"}
-            resp = self.session.post(rename_url, params=params, data=post_data)
-            resp.raise_for_status()
-            if "errormessage" in resp.text or "errorcode" in resp.text:
-                raise Exception(f"File renaming failed: {resp.text}")
+            draft_mgr = MoodleDraftFileManager(self.session)
+            if attachment_path:
+                draft_mgr.upload(attachment_path, itemid, ctx_id, sesskey, new_name)
+            if remove_attachment:
+                draft_mgr.delete(remove_attachment, itemid, ctx_id, sesskey)
+            if rename_attachment:
+                if not new_name:
+                    msg = "New name (--new-name) must be provided to rename an attachment."
+                    raise Exception(msg)
+                draft_mgr.rename(rename_attachment, new_name, itemid, ctx_id, sesskey)
 
         if new_text is not None:
             if not target_name:

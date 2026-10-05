@@ -10,7 +10,13 @@ from put_esys.cli.display import (
     display_quiz_info,
     display_quiz_search_results,
 )
-from put_esys.cli.helpers import catch_errors, check_authenticated, handle_output, is_numeric_or_url
+from put_esys.cli.helpers import (
+    catch_errors,
+    check_authenticated,
+    extract_id_from_url_or_numeric,
+    handle_output,
+    is_numeric_or_url,
+)
 from put_esys.models.quiz import QuizSearchResult
 from put_esys.services.ekursy import CourseService, EKursyClient, QuizService
 
@@ -19,14 +25,7 @@ console = Console()
 
 
 def _extract_id(id_or_url: str) -> str:
-    if id_or_url.startswith("http"):
-        match = re.search(r"id=(\d+)", id_or_url)
-        if match:
-            return match.group(1)
-        else:
-            console.print("[red]Could not parse quiz ID from URL.[/red]", err=True)
-            raise typer.Exit(code=1)
-    return id_or_url
+    return extract_id_from_url_or_numeric(id_or_url, "quiz")
 
 
 @quiz_app.command("info")

@@ -1,5 +1,16 @@
 from .assignment import AssignmentInfo, AssignmentRow, SubmittedFile
-from .course import Activity, Course, CourseContent, Section
+from .course import (
+    Activity,
+    CategoryBrowseResult,
+    Course,
+    CourseCategory,
+    CourseContent,
+    DiscoveredCourse,
+    DownloadedResource,
+    EnrolmentInfo,
+    EnrolmentStatus,
+    Section,
+)
 from .mail import EmailDetails, EmailSummary
 from .quiz import (
     Attachment,
@@ -13,6 +24,12 @@ from .quiz import (
 
 __all__ = [
     "Course",
+    "CourseCategory",
+    "DiscoveredCourse",
+    "CategoryBrowseResult",
+    "EnrolmentStatus",
+    "EnrolmentInfo",
+    "DownloadedResource",
     "Section",
     "Activity",
     "CourseContent",
