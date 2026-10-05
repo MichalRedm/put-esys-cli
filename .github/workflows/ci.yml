@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,3 +21,5 @@ jobs:
           pip install .[dev]
       - name: Run Ruff
         run: ruff check .
+      - name: Run Tests
+        run: python -m unittest discover tests
