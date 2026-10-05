@@ -56,14 +56,23 @@ flowchart TD
 - `helpers.py`: Decorators for error catching (`@catch_errors`) and session authentication verification (`check_authenticated`).
 
 ### 2. Services Layer (`put_esys/services/`)
-- `auth.py`: Multi-step SSO authentication handling with `elogin.put.poznan.pl`, CSRF parsing, and automatic POST redirects.
-- `config.py`: Secure storage and retrieval of credentials and session cookies via `appdirs`.
-- `mail.py`: IMAP4_SSL and SMTP_SSL client for reading and sending university student mail.
+- `auth.py`: Multi-step SSO authentication handling with `elogin.put.poznan.pl`, CSRF parsing, and automatic POST redirects with explicit timeouts.
+- `config.py`: Secure storage and retrieval of credentials and session cookies via `appdirs` with POSIX `0600` permissions.
+- `mail.py`: IMAP4_SSL and SMTP_SSL client with optimized header-only fetching (`BODY.PEEK`) and multi-chunk RFC 2047 decoding.
 - `ekursy/client.py`: Base client managing the authenticated `requests.Session` and landing page redirects.
-- `ekursy/courses.py`: Scrapes course enrollment lists, course sections/activities, browses Moodle categories (`course/index.php`), performs global course catalog search (`course/search.php`), and executes course self-enrolment (`enrol/index.php`).
-- `ekursy/assignments.py`: Scrapes assignment details, handles Moodle draft file uploads, and manages submission states.
-- `ekursy/quizzes.py`: Manages quiz attempts, questions, question types (multichoice, essay), and offline Markdown synchronization.
-- `ekursy/draft_files.py`: Moodle file picker interaction and draft item ID generation.
+- `ekursy/courses.py`: Core course service coordinating enrolled course scraping and course content hierarchy.
+- `ekursy/discovery.py`: Scrapes category trees (`course/index.php`), performs catalog search (`course/search.php`), and course query resolution.
+- `ekursy/enrolment.py`: Inspects enrolment prerequisites and submits self-enrolment forms.
+- `ekursy/downloader.py`: Downloads course activities into categorized subfolders (lecture, lab, project, classes).
+- `ekursy/notes.py`: Exports course sections, summaries, labels, and activities as Markdown.
+- `ekursy/assignments.py`: Scrapes assignment details and coordinates submission states.
+- `ekursy/quizzes.py`: Manages quiz attempts, questions, question types, and submissions.
+- `ekursy/quiz_sync.py`: Formats attempt dumps to Markdown templates and parses offline modifications for syncing.
+- `ekursy/draft_files.py`: `MoodleDraftFileManager` providing unified upload, delete, rename, and listing operations on Moodle draft areas.
+
+### 2.1 Utils Layer (`put_esys/utils/`)
+- `markdown.py`: HTML to Markdown conversion and LaTeX math formatting.
+- `http.py`: RFC 5987 / RFC 6266 filename decoding, Latin-1 mojibake healing, and streaming file downloads.
 
 ### 3. Models Layer (`put_esys/models/`)
 - `course.py`: `Course`, `CourseCategory`, `DiscoveredCourse`, `CategoryBrowseResult`, `EnrolmentInfo`, `EnrolmentStatus`, `Section`, `Activity` models.
