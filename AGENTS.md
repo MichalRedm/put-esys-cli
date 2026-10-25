@@ -84,9 +84,9 @@ Always run these commands from the repository root:
 - `pyproject.toml`: Build configuration, dependencies, and Ruff settings
 - `put_esys/`: Main Python package
   - `main.py`: CLI entry point with Windows UTF-8 console encoding setup
-  - `cli/`: Typer sub-applications (`course.py`, `assignment.py`, `quiz.py`, `mail.py`, `config.py`)
+  - `cli/`: Typer sub-applications (`course.py`, `assignment.py`, `quiz.py`, `mail.py`, `files.py`, `config.py`)
   - `services/`: Core integration services (`auth.py`, `config.py`, `mail.py`, `ekursy/`)
-  - `models/`: Pydantic data schemas (`course.py`, `assignment.py`, `quiz.py`, `mail.py`)
+  - `models/`: Pydantic data schemas (`course.py`, `assignment.py`, `quiz.py`, `mail.py`, `files.py`)
   - `utils/`: Utilities (Markdown conversion, helpers)
 - `.agents/`: AI Assistant configuration, rules, context, and workspace skills
   - `acs.yaml`: Agent Configuration Schema with machine-readable path triggers

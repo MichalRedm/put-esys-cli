@@ -11,6 +11,7 @@ from .course import (
     EnrolmentStatus,
     Section,
 )
+from .files import PrivateFileItem, PrivateFilesList
 from .mail import EmailDetails, EmailSummary
 from .quiz import (
     Attachment,
@@ -45,4 +46,6 @@ __all__ = [
     "AssignmentInfo",
     "EmailSummary",
     "EmailDetails",
+    "PrivateFileItem",
+    "PrivateFilesList",
 ]

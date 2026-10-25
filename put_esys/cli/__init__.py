@@ -18,6 +18,7 @@ from .assignment import assignment_app
 # Import sub-apps
 from .config import config_app
 from .course import course_app
+from .files import files_app
 from .mail import mail_app
 from .quiz import quiz_app
 
@@ -37,6 +38,7 @@ app.add_typer(course_app, name="course")
 app.add_typer(quiz_app, name="quiz")
 app.add_typer(mail_app, name="mail")
 app.add_typer(assignment_app, name="assignment")
+app.add_typer(files_app, name="files")
 
 
 @app.command()

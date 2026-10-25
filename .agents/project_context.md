@@ -24,6 +24,7 @@ Maintain and extend `put-esys-cli` as a robust, agent-friendly command-line tool
 - [x] eKursy quiz engine (view status, dump to Markdown, offline edit, sync answers back, submit).
 - [x] Student mail client (IMAP folder listing, search, read, download attachments, SMTP send).
 - [x] General HTML capture (`put-esys save`) and binary resource download (`put-esys download`).
+- [x] eKursy Private Files management (`put-esys files`: list, upload, download, mkdir, rename, move, delete).
 - [x] Modernized `.agents/` repository infrastructure and root `AGENTS.md`.
 - [ ] Unit & integration test suite with mocked HTTP/SSO responses.
 - [ ] Support for additional PUT systems (e.g. eDeanery/eDziekanat).

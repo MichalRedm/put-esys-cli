@@ -51,6 +51,7 @@ flowchart TD
 - `assignment.py`: Commands for inspecting assignments, uploading files, modifying submissions, and final submission.
 - `quiz.py`: Commands for inspecting quizzes, dumping attempts to Markdown templates, syncing edited answers, and submitting.
 - `mail.py`: Commands for mailbox listing, search, reading emails, downloading attachments, and sending.
+- `files.py`: Commands for private files management (`list`, `upload`, `download`, `mkdir`, `rename`, `move`, `delete`).
 - `config.py`: Management of PUT user credentials in local config storage.
 - `display.py`: Rich layout formatters (tables, trees, panels) for human-readable terminal output.
 - `helpers.py`: Decorators for error catching (`@catch_errors`) and session authentication verification (`check_authenticated`).
@@ -69,6 +70,7 @@ flowchart TD
 - `ekursy/quizzes.py`: Manages quiz attempts, questions, question types, and submissions.
 - `ekursy/quiz_sync.py`: Formats attempt dumps to Markdown templates and parses offline modifications for syncing.
 - `ekursy/draft_files.py`: `MoodleDraftFileManager` providing unified upload, delete, rename, and listing operations on Moodle draft areas.
+- `ekursy/private_files.py`: `PrivateFilesService` managing user private files (`user/files.php`, `draftfiles_ajax.php`), handling draft staging, file actions, and form commitment.
 
 ### 2.1 Utils Layer (`put_esys/utils/`)
 - `markdown.py`: HTML to Markdown conversion and LaTeX math formatting.
@@ -80,6 +82,7 @@ flowchart TD
 - `assignment.py`: `Assignment`, `AssignmentSubmission`, `SubmissionFile` models.
 - `quiz.py`: `QuizInfo`, `QuizAttempt`, `QuizQuestion`, `QuestionOption` models.
 - `mail.py`: `MailMessage`, `MailFolder`, `MailAttachment` models.
+- `files.py`: `PrivateFileItem`, `PrivateFilesList` models.
 
 ---
 

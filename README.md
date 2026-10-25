@@ -121,6 +121,33 @@ Edit an answer in an in-progress attempt:
 put-esys quiz edit <quiz_id> <question_number> --text "Your new answer"
 ```
 
+### Private Files
+Manage your eKursy private files (`https://ekursy.put.poznan.pl/user/files.php`):
+
+```bash
+# List private files and folders
+put-esys files list
+put-esys files list --path /labs/ -r --json -o files.json
+
+# Upload a file
+put-esys files upload report.pdf --path /reports/ --name "Final_Report.pdf" --yes
+
+# Download a file
+put-esys files download notes.txt --path /labs/ -o local_notes.txt
+
+# Create a folder
+put-esys files mkdir "sem9_archive" --yes
+
+# Rename a file or folder
+put-esys files rename old_notes.txt new_notes.txt --path /labs/ --yes
+
+# Move a file to another folder
+put-esys files move notes.txt /archive/ --path /labs/ --yes
+
+# Delete a file or directory
+put-esys files delete old_file.zip --yes
+```
+
 ### Manual Login (Optional)
 If you need to force a session refresh or test your credentials:
 ```bash
