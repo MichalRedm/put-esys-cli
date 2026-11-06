@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 from put_esys.models.assignment import AssignmentInfo, AssignmentRow, SubmittedFile
 
-from .draft_files import upload_draft_file
+from .draft_files import MoodleDraftFileManager
 
 
 class AssignmentService:
@@ -195,54 +195,15 @@ class AssignmentService:
             if not sesskey:
                 raise Exception("Could not find session key (sesskey) in the form.")
 
+            draft_mgr = MoodleDraftFileManager(self.session)
             if file_path:
-                upload_draft_file(self.session, file_path, itemid, ctx_id, sesskey, new_name)
+                draft_mgr.upload(file_path, itemid, ctx_id, sesskey, new_name)
 
             if remove_attachment:
-                delete_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
-                params = {
-                    "ctx_id": ctx_id,
-                    "itemid": itemid,
-                    "env": "filemanager",
-                    "course": "1",
-                    "maxbytes": "0",
-                    "areamaxbytes": "-1",
-                    "maxfiles": "-1",
-                    "subdirs": "0",
-                    "sesskey": sesskey,
-                    "action": "deletedraft",
-                    "draftpath": "/",
-                    "filename": remove_attachment,
-                }
-                resp = self.session.get(delete_url, params=params)
-                resp.raise_for_status()
+                draft_mgr.delete(remove_attachment, itemid, ctx_id, sesskey)
 
             if rename_attachment:
-                if not new_name:
-                    raise Exception("New name must be provided to rename an attachment.")
-                rename_url = "https://ekursy.put.poznan.pl/repository/draftfiles_manager.php"
-                params = {
-                    "ctx_id": ctx_id,
-                    "itemid": itemid,
-                    "env": "filemanager",
-                    "course": "1",
-                    "maxbytes": "0",
-                    "areamaxbytes": "-1",
-                    "maxfiles": "-1",
-                    "subdirs": "0",
-                    "sesskey": sesskey,
-                    "action": "rename",
-                    "draftpath": "/",
-                }
-                post_data = {
-                    "newfilename": new_name,
-                    "filename": rename_attachment,
-                    "draftpath": "/",
-                }
-                resp = self.session.post(rename_url, params=params, data=post_data)
-                resp.raise_for_status()
-                if "errormessage" in resp.text or "errorcode" in resp.text:
-                    raise Exception(f"File renaming failed: {resp.text}")
+                draft_mgr.rename(rename_attachment, new_name, itemid, ctx_id, sesskey)
 
         # Submit the form data
         post_url = form.get("action")

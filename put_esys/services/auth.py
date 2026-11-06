@@ -26,10 +26,14 @@ def authenticate(username, password) -> bool:
 
     # 1. elogin authorize
     resp = session.get(
-        "https://elogin.put.poznan.pl/app/authorize?system=ekursy.esys.put.poznan.pl"
+        "https://elogin.put.poznan.pl/app/authorize?system=ekursy.esys.put.poznan.pl",
+        timeout=30,
     )
     soup = BeautifulSoup(resp.text, "html.parser")
-    csrf_token = soup.find("input", {"name": "csrf_token"}).get("value")
+    csrf_input = soup.find("input", {"name": "csrf_token"})
+    if not csrf_input or not csrf_input.get("value"):
+        raise AuthError("Could not locate CSRF token on eLogin authorization page.")
+    csrf_token = csrf_input["value"]
 
     # 2. elogin login POST
     login_url = resp.url
@@ -37,6 +41,7 @@ def authenticate(username, password) -> bool:
         login_url,
         data={"login": username, "password": password, "csrf_token": csrf_token, "send": ""},
         headers={"Referer": resp.url},
+        timeout=30,
     )
 
     # 3. Follow all auto-submit forms
@@ -68,7 +73,9 @@ def authenticate(username, password) -> bool:
                 }
 
             # Post the form
-            resp = session.post(action_url, data=form_data, headers={"Referer": resp.url})
+            resp = session.post(
+                action_url, data=form_data, headers={"Referer": resp.url}, timeout=30
+            )
         else:
             break
 

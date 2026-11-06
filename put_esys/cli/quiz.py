@@ -10,7 +10,13 @@ from put_esys.cli.display import (
     display_quiz_info,
     display_quiz_search_results,
 )
-from put_esys.cli.helpers import catch_errors, check_authenticated, handle_output, is_numeric_or_url
+from put_esys.cli.helpers import (
+    catch_errors,
+    check_authenticated,
+    extract_id_from_url_or_numeric,
+    handle_output,
+    is_numeric_or_url,
+)
 from put_esys.models.quiz import QuizSearchResult
 from put_esys.services.ekursy import CourseService, EKursyClient, QuizService
 
@@ -19,14 +25,7 @@ console = Console()
 
 
 def _extract_id(id_or_url: str) -> str:
-    if id_or_url.startswith("http"):
-        match = re.search(r"id=(\d+)", id_or_url)
-        if match:
-            return match.group(1)
-        else:
-            console.print("[red]Could not parse quiz ID from URL.[/red]", err=True)
-            raise typer.Exit(code=1)
-    return id_or_url
+    return extract_id_from_url_or_numeric(id_or_url, "quiz")
 
 
 @quiz_app.command("info")
@@ -171,12 +170,17 @@ def quiz_edit(
 
 @quiz_app.command("start")
 @catch_errors
-def quiz_start(quiz_id: int):
+def quiz_start(
+    quiz_id: int,
+    json_format: bool = typer.Option(False, "--json", help="Output raw JSON data"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+):
     """Start a new quiz attempt."""
     client = EKursyClient()
     check_authenticated(client)
 
-    console.print(f"Starting new attempt for quiz [bold]{quiz_id}[/bold]...")
+    if not json_format and not output:
+        console.print(f"Starting new attempt for quiz [bold]{quiz_id}[/bold]...")
 
     with console.status("[bold green]Communicating with eKursy..."):
         service = QuizService(client.session)
@@ -185,6 +189,14 @@ def quiz_start(quiz_id: int):
     if error:
         console.print(f"[red]Error: {error}[/red]", err=True)
         raise typer.Exit(code=1)
+
+    result_data = {
+        "quiz_id": quiz_id,
+        "attempt_id": int(attempt_id) if attempt_id.isdigit() else attempt_id,
+    }
+    if json_format or output:
+        handle_output(result_data, output, json_format, None)
+        return
 
     console.print(f"[bold green]Successfully started/found attempt {attempt_id}.[/bold green]")
     console.print(f"Run [bold]put-esys quiz attempt {quiz_id} {attempt_id}[/bold] to view it.")
@@ -412,35 +424,8 @@ def quiz_dump(
         console.print(f"[red]Error: {error}[/red]", err=True)
         raise typer.Exit(code=1)
 
-    from put_esys.utils.markdown import html_to_markdown
-
-    lines = []
-    lines.append(f"# Quiz Attempt {info.attempt_id} (Quiz ID: {info.quiz_id})\n")
-
-    for q in info.questions:
-        lines.append(f"=== QUESTION {q.number} ===")
-        lines.append(f"Type: {q.type}")
-        lines.append(f"State: {q.state}\n")
-
-        q_text = html_to_markdown(q.text)
-        lines.append("## Question Text")
-        lines.append(q_text)
-        lines.append("")
-
-        a_text = html_to_markdown(q.answer)
-        lines.append("## Current Answer")
-        lines.append(a_text)
-        lines.append("")
-
-        if q.comment:
-            c_text = html_to_markdown(q.comment)
-            lines.append("## Teacher Comment")
-            lines.append(c_text)
-            lines.append("")
-
-        lines.append("")  # extra spacing
-
-    content = "\n".join(lines)
+    from put_esys.services.ekursy.quiz_sync import QuizSyncService
+    content = QuizSyncService.dump_to_markdown(info)
 
     if not output:
         output = f"quiz_{quiz_id}_attempt_{info.attempt_id}.md"
@@ -475,31 +460,10 @@ def quiz_sync(
     with open(file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Parse attempt ID from header
-    attempt_id_match = re.search(r"Quiz Attempt (\d+)", content)
-    attempt_id = attempt_id_match.group(1) if attempt_id_match else None
-
-    # Parse questions from Markdown content
+    from put_esys.services.ekursy.quiz_sync import QuizSyncService
     from put_esys.utils.markdown import html_to_markdown
 
-    parts = content.split("=== QUESTION ")
-    local_answers = {}
-    for part in parts[1:]:
-        lines = part.split("\n")
-        if not lines:
-            continue
-        number_line = lines[0]
-        q_no = number_line.replace("===", "").strip()
-        if not q_no.isdigit():
-            continue
-
-        # Extract current answer section
-        subparts = part.split("## Current Answer")
-        if len(subparts) > 1:
-            ans_content = subparts[1].strip()
-            comment_split = ans_content.split("## Teacher Comment")
-            ans_text = comment_split[0].strip()
-            local_answers[int(q_no)] = ans_text
+    attempt_id, local_answers = QuizSyncService.parse_markdown_dump(content)
 
     if not local_answers:
         console.print(

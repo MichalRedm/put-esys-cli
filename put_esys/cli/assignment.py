@@ -1,4 +1,3 @@
-import re
 from typing import Optional
 
 import typer
@@ -6,7 +5,12 @@ from rich.console import Console
 from rich.panel import Panel
 
 from put_esys.cli.display import display_assignment
-from put_esys.cli.helpers import catch_errors, check_authenticated, handle_output
+from put_esys.cli.helpers import (
+    catch_errors,
+    check_authenticated,
+    extract_id_from_url_or_numeric,
+    handle_output,
+)
 from put_esys.services.ekursy import AssignmentService, EKursyClient
 
 assignment_app = typer.Typer(help="Manage assignments")
@@ -14,14 +18,7 @@ console = Console()
 
 
 def _extract_id(id_or_url: str) -> str:
-    if id_or_url.startswith("http"):
-        match = re.search(r"id=(\d+)", id_or_url)
-        if match:
-            return match.group(1)
-        else:
-            console.print("[red]Could not parse assignment ID from URL.[/red]", err=True)
-            raise typer.Exit(code=1)
-    return id_or_url
+    return extract_id_from_url_or_numeric(id_or_url, "assignment")
 
 
 @assignment_app.command("show")

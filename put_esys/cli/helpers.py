@@ -1,3 +1,4 @@
+import re
 import sys
 from functools import wraps
 from typing import Optional
@@ -10,7 +11,6 @@ from put_esys.services.config import load_credentials
 
 console = Console(stderr=True)
 
-
 def is_numeric_or_url(id_or_url: str) -> bool:
     """Checks if the given string is a numeric ID or a URL."""
     if id_or_url.isdigit():
@@ -18,6 +18,17 @@ def is_numeric_or_url(id_or_url: str) -> bool:
     if id_or_url.startswith("http://") or id_or_url.startswith("https://"):
         return True
     return False
+
+
+def extract_id_from_url_or_numeric(id_or_url: str, entity_name: str = "item") -> str:
+    """Extract numeric ID from an ID string or an HTTP URL containing id=<DIGITS>."""
+    if id_or_url.startswith("http://") or id_or_url.startswith("https://"):
+        match = re.search(r"id=(\d+)", id_or_url)
+        if match:
+            return match.group(1)
+        console.print(f"[red]Could not parse {entity_name} ID from URL.[/red]")
+        raise typer.Exit(code=1)
+    return id_or_url
 
 
 def catch_errors(f):

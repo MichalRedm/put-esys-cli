@@ -48,6 +48,15 @@ This skill provides instructions and examples for using the `put-esys` CLI tool 
 - `put-esys quiz dump <QUIZ_ID> [ATTEMPT_ID] [-o/--output PATH]`: Dump a quiz attempt into a clean Markdown file template for offline editing.
 - `put-esys quiz sync <QUIZ_ID> -f/--file <PATH>`: Sync/upload modified answers from a local Markdown file back to eKursy.
 
+### Private Files
+- `put-esys files list [--path PATH] [--recursive/-r] [--json] [-o/--output PATH]`: List private files and folders.
+- `put-esys files upload <FILE_PATH> [--path REMOTE_PATH] [--name NEW_NAME] [-y/--yes] [--json] [-o/--output PATH]`: Upload a file to private storage.
+- `put-esys files download <REMOTE_FILE> [-o/--output LOCAL_PATH] [--path REMOTE_PATH] [-y/--yes]`: Download a private file to local disk.
+- `put-esys files mkdir <DIR_NAME> [--path PARENT_PATH] [-y/--yes] [--json] [-o/--output PATH]`: Create a folder in private storage.
+- `put-esys files rename <FILENAME> <NEW_NAME> [--path PATH] [-y/--yes] [--json] [-o/--output PATH]`: Rename a file or folder in private storage.
+- `put-esys files move <FILENAME> <TARGET_PATH> [--path SOURCE_PATH] [-y/--yes] [--json] [-o/--output PATH]`: Move a file or folder to another directory.
+- `put-esys files delete <FILENAME> [--path PATH] [-y/--yes] [--json] [-o/--output PATH]`: Delete a file or folder from private storage.
+
 ### Mail
 - `put-esys mail folders [--json] [-o/--output PATH]`: List all available mail folders on the server.
 - `put-esys mail list [--limit N] [--search QUERY] [--folder FOLDER] [--json] [-o/--output PATH]`: List recent emails from a specific folder (defaults to INBOX), optionally filtered by a search query.
